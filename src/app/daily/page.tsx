@@ -1,0 +1,778 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  getBarRate,
+  getProductionUnit,
+  getCategories,
+  getSubcategories,
+  getDailyLog,
+  createDailyLog,
+  updateDailyLog,
+  getLossEntries,
+  createLossEntry,
+  updateLossEntry,
+  deleteLossEntry,
+} from "@/lib/store";
+import {
+  LossCategory,
+  LossSubcategory,
+  LossEntry,
+  DailyLog,
+  LossType,
+} from "@/types";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import {
+  CalendarIcon,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Lock,
+} from "lucide-react";
+import { format, parseISO } from "date-fns";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+export default function DailyPage() {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const [bar, setBar] = useState<number>(0);
+  const [productionUnit, setProductionUnit] = useState<string>("units");
+  const [categories, setCategories] = useState<LossCategory[]>([]);
+  const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
+
+  const [dailyLog, setDailyLog] = useState<DailyLog | null>(null);
+  const [lossEntries, setLossEntries] = useState<LossEntry[]>([]);
+
+  const [productionInput, setProductionInput] = useState<string>("");
+  const [dayComments, setDayComments] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
+
+  const dateKey = useMemo(
+    () => format(selectedDate, "yyyy-MM-dd"),
+    [selectedDate]
+  );
+
+  const isClosed = dailyLog?.status === "closed";
+
+  // Load config data on mount
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const [barVal, unit, cats, subs] = await Promise.all([
+          getBarRate(),
+          getProductionUnit(),
+          getCategories(),
+          getSubcategories(),
+        ]);
+        setBar(barVal);
+        setProductionUnit(unit);
+        setCategories(cats);
+        setSubcategories(subs);
+      } catch {
+        toast.error("Failed to load configuration data.");
+      }
+    };
+    loadConfig();
+  }, []);
+
+  // Load daily log and entries when date changes
+  useEffect(() => {
+    const loadDailyData = async () => {
+      setLoading(true);
+      try {
+        const log = await getDailyLog(dateKey);
+        setDailyLog(log);
+        if (log) {
+          setProductionInput(String(log.production));
+          setDayComments(log.comments ?? "");
+          const entries = await getLossEntries(dateKey);
+          setLossEntries(entries);
+        } else {
+          setProductionInput("");
+          setDayComments("");
+          setLossEntries([]);
+        }
+      } catch {
+        toast.error("Failed to load daily data.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadDailyData();
+  }, [dateKey]);
+
+  // Computed values
+  const production = dailyLog?.production ?? 0;
+  const delta = bar - production;
+  const totalAccounted = useMemo(
+    () => lossEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0),
+    [lossEntries]
+  );
+  const remaining = Math.round((delta - totalAccounted) * 100) / 100;
+  const isBalanced = Math.abs(remaining) < 0.01;
+
+  // Start accounting for a new day
+  const handleStartAccounting = useCallback(async () => {
+    const prod = parseFloat(productionInput);
+    if (isNaN(prod) || prod < 0) {
+      toast.error("Please enter a valid production total.");
+      return;
+    }
+    try {
+      setSaving(true);
+      const log = await createDailyLog({
+        date: dateKey,
+        production: prod,
+        bar,
+        comments: "",
+        status: "open",
+      });
+      setDailyLog(log);
+      setLossEntries([]);
+      toast.success("Daily log created. Start adding loss entries.");
+    } catch {
+      toast.error("Failed to create daily log.");
+    } finally {
+      setSaving(false);
+    }
+  }, [productionInput, dateKey, bar]);
+
+  // Update production total
+  const handleUpdateProduction = useCallback(
+    async (value: string) => {
+      setProductionInput(value);
+      const prod = parseFloat(value);
+      if (!dailyLog || isNaN(prod) || prod < 0) return;
+      try {
+        const updated = await updateDailyLog(dateKey, { production: prod });
+        setDailyLog(updated);
+      } catch {
+        toast.error("Failed to update production.");
+      }
+    },
+    [dailyLog, dateKey]
+  );
+
+  // Update day comments
+  const handleDayCommentsChange = useCallback(
+    async (value: string) => {
+      setDayComments(value);
+      if (!dailyLog) return;
+      try {
+        await updateDailyLog(dateKey, { comments: value });
+      } catch {
+        // Silently handle - auto-save
+      }
+    },
+    [dailyLog, dateKey]
+  );
+
+  // Add a new loss entry
+  const handleAddLossEntry = useCallback(async () => {
+    if (!dailyLog) return;
+    try {
+      const entry = await createLossEntry({
+        dailyLogId: dailyLog.id,
+        date: dateKey,
+        categoryId: "",
+        subcategoryId: "",
+        lossType: "shutdown" as LossType,
+        amount: 0,
+        comments: "",
+      });
+      setLossEntries((prev) => [...prev, entry]);
+    } catch {
+      toast.error("Failed to add loss entry.");
+    }
+  }, [dailyLog, dateKey]);
+
+  // Update a loss entry field
+  const handleUpdateLossEntry = useCallback(
+    async (entryId: string, field: string, value: string | number) => {
+      setLossEntries((prev) =>
+        prev.map((e) => {
+          if (e.id !== entryId) return e;
+          const updated = { ...e, [field]: value };
+          // Reset subcategory when category changes
+          if (field === "categoryId") {
+            updated.subcategoryId = "";
+          }
+          return updated;
+        })
+      );
+      try {
+        const updateData: Record<string, string | number> = { [field]: value };
+        if (field === "categoryId") {
+          updateData.subcategoryId = "";
+        }
+        await updateLossEntry(entryId, updateData);
+      } catch {
+        toast.error("Failed to save loss entry.");
+      }
+    },
+    []
+  );
+
+  // Delete a loss entry
+  const handleDeleteLossEntry = useCallback(async (entryId: string) => {
+    try {
+      await deleteLossEntry(entryId);
+      setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
+      toast.success("Loss entry removed.");
+    } catch {
+      toast.error("Failed to delete loss entry.");
+    }
+  }, []);
+
+  // Close the day
+  const handleCloseDay = useCallback(async () => {
+    if (!dailyLog || !isBalanced) return;
+    try {
+      setSaving(true);
+      const updated = await updateDailyLog(dateKey, {
+        status: "closed",
+        comments: dayComments,
+      });
+      setDailyLog(updated);
+      toast.success("Day closed successfully.");
+    } catch {
+      toast.error("Failed to close day.");
+    } finally {
+      setSaving(false);
+    }
+  }, [dailyLog, isBalanced, dateKey, dayComments]);
+
+  // Get subcategories for a given category
+  const getSubcategoriesForCategory = useCallback(
+    (categoryId: string): LossSubcategory[] => {
+      return subcategories.filter((s) => s.categoryId === categoryId);
+    },
+    [subcategories]
+  );
+
+  // Get allowed loss types for a category
+  const getAllowedLossTypes = useCallback(
+    (categoryId: string): LossType[] => {
+      const category = categories.find((c) => c.id === categoryId);
+      if (!category) return ["shutdown", "slowdown"] as LossType[];
+      return (category.allowedLossTypes ?? ["shutdown", "slowdown"]) as LossType[];
+    },
+    [categories]
+  );
+
+  // Handle date selection
+  const handleDateSelect = useCallback((date: Date | undefined) => {
+    if (date) {
+      setSelectedDate(date);
+      setCalendarOpen(false);
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-muted-foreground text-lg">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto max-w-5xl py-6 px-4 space-y-6">
+      {/* Header with Date Picker */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Daily Loss Accounting
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Record production and account for losses
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isClosed && (
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="h-3 w-3" />
+              Closed
+            </Badge>
+          )}
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[220px] justify-start text-left font-normal",
+                  !selectedDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {format(selectedDate, "EEEE, MMM d, yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={handleDateSelect}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* No daily log yet - show initial form */}
+      {!dailyLog && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Start Daily Accounting</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              No production data recorded for{" "}
+              <span className="font-medium text-foreground">
+                {format(selectedDate, "MMMM d, yyyy")}
+              </span>
+              . Enter the daily production total to begin accounting for losses.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 items-end">
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="production-init">
+                  Daily Production Total ({productionUnit})
+                </Label>
+                <Input
+                  id="production-init"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder={`Enter production in ${productionUnit}`}
+                  value={productionInput}
+                  onChange={(e) => setProductionInput(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">
+                  BAR: {bar.toLocaleString()} {productionUnit}
+                </Label>
+                <Button
+                  onClick={handleStartAccounting}
+                  disabled={
+                    saving || !productionInput || isNaN(parseFloat(productionInput))
+                  }
+                >
+                  Start Accounting
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Daily log exists - show full interface */}
+      {dailyLog && (
+        <>
+          {/* KPI Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Production
+                </p>
+                <p className="text-2xl font-bold mt-1">
+                  {production.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  BAR
+                </p>
+                <p className="text-2xl font-bold mt-1">
+                  {bar.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Delta
+                </p>
+                <p className="text-2xl font-bold mt-1 text-orange-600">
+                  {delta.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Accounted
+                </p>
+                <p className="text-2xl font-bold mt-1">
+                  {totalAccounted.toLocaleString()}
+                </p>
+                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+              </CardContent>
+            </Card>
+            <Card
+              className={cn(
+                "col-span-2 md:col-span-1",
+                isBalanced
+                  ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+                  : "border-red-500 bg-red-50 dark:bg-red-950/20"
+              )}
+            >
+              <CardContent className="pt-4 pb-3 px-4">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Remaining
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {isBalanced ? (
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                  )}
+                  <p
+                    className={cn(
+                      "text-2xl font-bold",
+                      isBalanced ? "text-green-600" : "text-red-600"
+                    )}
+                  >
+                    {remaining.toLocaleString()}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Production Edit (when not closed) */}
+          {!isClosed && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Production</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  <div className="flex-1 max-w-xs space-y-1">
+                    <Label htmlFor="production-edit">
+                      Daily Production ({productionUnit})
+                    </Label>
+                    <Input
+                      id="production-edit"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={productionInput}
+                      onChange={(e) => handleUpdateProduction(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Loss Entries */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">
+                  Loss Entries ({lossEntries.length})
+                </CardTitle>
+                {!isClosed && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddLossEntry}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Loss
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {lossEntries.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No loss entries yet.</p>
+                  {!isClosed && (
+                    <p className="text-sm mt-1">
+                      Click &quot;Add Loss&quot; to start accounting for the
+                      delta.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {lossEntries.map((entry, index) => {
+                const filteredSubcategories = getSubcategoriesForCategory(
+                  entry.categoryId
+                );
+                const allowedTypes = getAllowedLossTypes(entry.categoryId);
+
+                return (
+                  <div
+                    key={entry.id}
+                    className={cn(
+                      "grid grid-cols-1 md:grid-cols-12 gap-3 p-4 rounded-lg border bg-card",
+                      isClosed && "opacity-80"
+                    )}
+                  >
+                    {/* Row number */}
+                    <div className="md:col-span-12 flex items-center justify-between md:hidden">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Entry #{index + 1}
+                      </span>
+                      {!isClosed && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteLossEntry(entry.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Category */}
+                    <div className="md:col-span-3 space-y-1">
+                      <Label className="text-xs">Category</Label>
+                      <Select
+                        value={entry.categoryId}
+                        onValueChange={(v) =>
+                          handleUpdateLossEntry(entry.id, "categoryId", v)
+                        }
+                        disabled={isClosed}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map((cat) => (
+                            <SelectItem key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Subcategory */}
+                    <div className="md:col-span-3 space-y-1">
+                      <Label className="text-xs">Subcategory</Label>
+                      <Select
+                        value={entry.subcategoryId}
+                        onValueChange={(v) =>
+                          handleUpdateLossEntry(entry.id, "subcategoryId", v)
+                        }
+                        disabled={isClosed || !entry.categoryId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select subcategory" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filteredSubcategories.map((sub) => (
+                            <SelectItem key={sub.id} value={sub.id}>
+                              {sub.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Loss Type */}
+                    <div className="md:col-span-2 space-y-1">
+                      <Label className="text-xs">Loss Type</Label>
+                      <Select
+                        value={entry.lossType}
+                        onValueChange={(v) =>
+                          handleUpdateLossEntry(entry.id, "lossType", v)
+                        }
+                        disabled={isClosed}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allowedTypes.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type.charAt(0).toUpperCase() + type.slice(1)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="md:col-span-1 space-y-1">
+                      <Label className="text-xs">
+                        Amount
+                      </Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="0"
+                        value={entry.amount || ""}
+                        onChange={(e) =>
+                          handleUpdateLossEntry(
+                            entry.id,
+                            "amount",
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                        disabled={isClosed}
+                      />
+                    </div>
+
+                    {/* Comments */}
+                    <div className="md:col-span-2 space-y-1">
+                      <Label className="text-xs">Comments</Label>
+                      <Input
+                        placeholder="Notes..."
+                        value={entry.comments ?? ""}
+                        onChange={(e) =>
+                          handleUpdateLossEntry(
+                            entry.id,
+                            "comments",
+                            e.target.value
+                          )
+                        }
+                        disabled={isClosed}
+                      />
+                    </div>
+
+                    {/* Delete button (desktop) */}
+                    <div className="hidden md:flex md:col-span-1 items-end justify-center pb-0.5">
+                      {!isClosed && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => handleDeleteLossEntry(entry.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {lossEntries.length > 0 && !isClosed && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddLossEntry}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Another Loss
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Day Comments */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Day Comments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                placeholder="Add any overall notes for this production day..."
+                value={dayComments}
+                onChange={(e) => handleDayCommentsChange(e.target.value)}
+                disabled={isClosed}
+                rows={3}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Close Day Action */}
+          {!isClosed && (
+            <Card>
+              <CardContent className="pt-6 pb-6">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-center sm:text-left">
+                    <p className="font-medium">
+                      {isBalanced
+                        ? "All losses are accounted for. Ready to close."
+                        : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining to account for.`}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {isBalanced
+                        ? "Closing the day will lock all entries from further edits."
+                        : "All losses must be accounted for before closing the day."}
+                    </p>
+                  </div>
+                  <Button
+                    size="lg"
+                    onClick={handleCloseDay}
+                    disabled={!isBalanced || saving}
+                    className={cn(
+                      "min-w-[140px]",
+                      isBalanced &&
+                        "bg-green-600 hover:bg-green-700 text-white"
+                    )}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Close Day
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Closed Day Banner */}
+          {isClosed && (
+            <Card className="border-muted bg-muted/30">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex items-center justify-center gap-3 text-muted-foreground">
+                  <Lock className="h-5 w-5" />
+                  <p className="font-medium">
+                    This day has been closed and is read-only.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
