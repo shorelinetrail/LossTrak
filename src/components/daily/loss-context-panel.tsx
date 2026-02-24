@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import {
+  ArrowDownToLine,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Copy,
   History,
@@ -66,6 +68,7 @@ export function LossContextPanel({
   disabled = false,
 }: LossContextPanelProps) {
   const [expanded, setExpanded] = useState(true);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   const previousDay = history[0] ?? null;
   // Show oldest-first for display (left=oldest, right=most recent)
@@ -83,24 +86,56 @@ export function LossContextPanel({
     return m;
   }, [subcategories]);
 
-  // Heatmap: category totals per day, plus global max for color scaling
+  // Heatmap: category totals per day with subcategory breakdown
   const heatmapData = useMemo(() => {
     let globalMax = 0;
     const rows = categories.map((cat) => {
+      const catSubs = subcategories.filter((s) => s.categoryId === cat.id);
       const cells = displayHistory.map((day) => {
-        const total = day.entries
-          .filter((e) => e.categoryId === cat.id)
-          .reduce((sum, e) => sum + e.amount, 0);
+        const catEntries = day.entries.filter((e) => e.categoryId === cat.id);
+        const total = catEntries.reduce((sum, e) => sum + e.amount, 0);
         if (total > globalMax) globalMax = total;
-        return { date: day.date, total };
+        // Subcategory breakdown for tooltip
+        const subBreakdown = catSubs
+          .map((sub) => ({
+            name: sub.name,
+            amount: catEntries
+              .filter((e) => e.subcategoryId === sub.id)
+              .reduce((sum, e) => sum + e.amount, 0),
+          }))
+          .filter((b) => b.amount > 0);
+        return { date: day.date, total, subBreakdown };
       });
-      return { category: cat, cells };
+      // Subcategory rows for expandable detail
+      const subcategoryRows = catSubs
+        .map((sub) => {
+          const subCells = displayHistory.map((day) => {
+            const total = day.entries
+              .filter((e) => e.categoryId === cat.id && e.subcategoryId === sub.id)
+              .reduce((sum, e) => sum + e.amount, 0);
+            return { date: day.date, total };
+          });
+          const rowTotal = subCells.reduce((s, c) => s + c.total, 0);
+          return { subcategory: sub, cells: subCells, rowTotal };
+        })
+        .filter((r) => r.rowTotal > 0);
+      return { category: cat, cells, subcategoryRows };
     });
     return { rows, globalMax };
-  }, [categories, displayHistory]);
+  }, [categories, subcategories, displayHistory]);
 
-  // Streak analysis: consecutive days a category appears, avg amount
+  // Streak analysis: consecutive days a category appears, avg amount, with subcategory detail
   const streaks = useMemo(() => {
+    function computeTrend(amounts: number[]): "up" | "down" | "flat" | null {
+      if (amounts.length < 2) return null;
+      const recent = amounts[0];
+      const prior = amounts[1];
+      const diff = recent - prior;
+      const pctChange = prior > 0 ? Math.abs(diff / prior) : 0;
+      if (pctChange < 0.1) return "flat";
+      return diff > 0 ? "up" : "down";
+    }
+
     // history is already most-recent-first
     return categories
       .map((cat) => {
@@ -123,18 +158,40 @@ export function LossContextPanel({
         }
 
         const avg = consecutiveDays > 0 ? totalAmount / consecutiveDays : 0;
+        const trend = computeTrend(amounts);
 
-        // Determine trend from last 3 values (if available)
-        let trend: "up" | "down" | "flat" | null = null;
-        if (amounts.length >= 2) {
-          const recent = amounts[0];
-          const prior = amounts[1];
-          const diff = recent - prior;
-          const pctChange = prior > 0 ? Math.abs(diff / prior) : 0;
-          if (pctChange < 0.1) trend = "flat";
-          else if (diff > 0) trend = "up";
-          else trend = "down";
-        }
+        // Subcategory-level streaks within this category
+        const catSubs = subcategories.filter((s) => s.categoryId === cat.id);
+        const subcategoryStreaks = catSubs
+          .map((sub) => {
+            let subConsecutive = 0;
+            let subTotal = 0;
+            const subAmounts: number[] = [];
+
+            for (const day of history) {
+              const daySubTotal = day.entries
+                .filter((e) => e.categoryId === cat.id && e.subcategoryId === sub.id)
+                .reduce((sum, e) => sum + e.amount, 0);
+
+              if (daySubTotal > 0) {
+                subConsecutive++;
+                subTotal += daySubTotal;
+                subAmounts.push(daySubTotal);
+              } else {
+                break;
+              }
+            }
+
+            return {
+              subcategory: sub,
+              consecutiveDays: subConsecutive,
+              avg: subConsecutive > 0 ? subTotal / subConsecutive : 0,
+              latestAmount: subAmounts[0] ?? 0,
+              trend: computeTrend(subAmounts),
+            };
+          })
+          .filter((s) => s.consecutiveDays > 0)
+          .sort((a, b) => b.consecutiveDays - a.consecutiveDays);
 
         return {
           category: cat,
@@ -142,11 +199,12 @@ export function LossContextPanel({
           avg,
           latestAmount: amounts[0] ?? 0,
           trend,
+          subcategoryStreaks,
         };
       })
       .filter((s) => s.consecutiveDays > 0)
       .sort((a, b) => b.consecutiveDays - a.consecutiveDays);
-  }, [categories, history]);
+  }, [categories, subcategories, history]);
 
   if (history.length === 0) {
     return null;
@@ -234,6 +292,7 @@ export function LossContextPanel({
                             <TableHead className="text-xs h-8">Type</TableHead>
                             <TableHead className="text-xs h-8 text-right">Amount</TableHead>
                             <TableHead className="text-xs h-8">Comment</TableHead>
+                            {!disabled && <TableHead className="text-xs h-8 w-8" />}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -259,6 +318,25 @@ export function LossContextPanel({
                               <TableCell className="text-xs py-1.5 text-muted-foreground max-w-[200px] truncate">
                                 {entry.comments || "—"}
                               </TableCell>
+                              {!disabled && (
+                                <TableCell className="text-xs py-1.5 px-1">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0"
+                                        onClick={() => onCarryForward([entry])}
+                                      >
+                                        <ArrowDownToLine className="h-3 w-3" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left" className="text-xs">
+                                      Copy this entry to today
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                           <TableRow className="bg-muted/30 hover:bg-muted/30 font-medium">
@@ -271,6 +349,7 @@ export function LossContextPanel({
                                 .toLocaleString()}
                             </TableCell>
                             <TableCell />
+                            {!disabled && <TableCell />}
                           </TableRow>
                         </TableBody>
                       </Table>
@@ -312,52 +391,175 @@ export function LossContextPanel({
                         <th className="text-right py-1.5 pl-3 font-medium text-muted-foreground">
                           Total
                         </th>
+                        {!disabled && (
+                          <th className="py-1.5 pl-1 w-6" />
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {heatmapData.rows.map(({ category, cells }) => {
+                      {heatmapData.rows.map(({ category, cells, subcategoryRows }) => {
                         const rowTotal = cells.reduce(
                           (s, c) => s + c.total,
                           0
                         );
                         if (rowTotal === 0) return null;
+                        const isExpanded = expandedCategories.has(category.id);
+                        const toggleExpand = () => {
+                          setExpandedCategories((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(category.id)) next.delete(category.id);
+                            else next.add(category.id);
+                            return next;
+                          });
+                        };
                         return (
-                          <tr key={category.id}>
-                            <td className="py-1 pr-3 font-medium whitespace-nowrap">
-                              {category.name}
-                            </td>
-                            {cells.map((cell) => (
-                              <td key={cell.date} className="py-1 px-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
+                          <React.Fragment key={category.id}>
+                            <tr>
+                              <td
+                                className="py-1 pr-3 font-medium whitespace-nowrap cursor-pointer select-none"
+                                onClick={subcategoryRows.length > 0 ? toggleExpand : undefined}
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  {subcategoryRows.length > 0 && (
+                                    isExpanded
+                                      ? <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                                      : <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                                  )}
+                                  {category.name}
+                                </span>
+                              </td>
+                              {cells.map((cell) => (
+                                <td key={cell.date} className="py-1 px-1">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <div
+                                        className={cn(
+                                          "rounded px-1.5 py-1 text-center tabular-nums transition-colors",
+                                          cell.total > 0
+                                            ? heatColor(
+                                                cell.total,
+                                                heatmapData.globalMax
+                                              )
+                                            : "text-muted-foreground/30"
+                                        )}
+                                      >
+                                        {cell.total > 0
+                                          ? cell.total.toLocaleString()
+                                          : "—"}
+                                      </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-xs">
+                                      <div className="font-medium">
+                                        {category.name} — {format(parseISO(cell.date), "MMM d")}
+                                      </div>
+                                      <div>{cell.total.toLocaleString()} {productionUnit}</div>
+                                      {cell.subBreakdown.length > 0 && (
+                                        <div className="mt-1 border-t border-border/40 pt-1 space-y-0.5">
+                                          {cell.subBreakdown.map((b) => (
+                                            <div key={b.name} className="flex justify-between gap-3">
+                                              <span className="text-muted-foreground">{b.name}</span>
+                                              <span className="tabular-nums">{b.amount.toLocaleString()}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </td>
+                              ))}
+                              <td className="py-1 pl-3 text-right font-medium tabular-nums">
+                                {rowTotal.toLocaleString()}
+                              </td>
+                              {!disabled && (
+                                <td className="py-1 pl-1">
+                                  {(() => {
+                                    // Find entries from the most recent day that has data for this category
+                                    const recentDay = [...history].find((d) =>
+                                      d.entries.some((e) => e.categoryId === category.id)
+                                    );
+                                    if (!recentDay) return null;
+                                    const catEntries = recentDay.entries.filter(
+                                      (e) => e.categoryId === category.id
+                                    );
+                                    return (
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-5 w-5 p-0"
+                                            onClick={() => onCarryForward(catEntries)}
+                                          >
+                                            <ArrowDownToLine className="h-3 w-3" />
+                                          </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left" className="text-xs">
+                                          Copy {category.name} entries to today
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    );
+                                  })()}
+                                </td>
+                              )}
+                            </tr>
+                            {/* Expanded subcategory rows */}
+                            {isExpanded && subcategoryRows.map(({ subcategory, cells: subCells, rowTotal: subTotal }) => (
+                              <tr key={subcategory.id} className="text-muted-foreground">
+                                <td className="py-0.5 pr-3 whitespace-nowrap pl-5 text-[11px]">
+                                  {subcategory.name}
+                                </td>
+                                {subCells.map((cell) => (
+                                  <td key={cell.date} className="py-0.5 px-1">
                                     <div
                                       className={cn(
-                                        "rounded px-1.5 py-1 text-center tabular-nums transition-colors",
+                                        "rounded px-1.5 py-0.5 text-center tabular-nums text-[11px]",
                                         cell.total > 0
-                                          ? heatColor(
-                                              cell.total,
-                                              heatmapData.globalMax
-                                            )
-                                          : "text-muted-foreground/30"
+                                          ? heatColor(cell.total, heatmapData.globalMax)
+                                          : "text-muted-foreground/20"
                                       )}
                                     >
-                                      {cell.total > 0
-                                        ? cell.total.toLocaleString()
-                                        : "—"}
+                                      {cell.total > 0 ? cell.total.toLocaleString() : "—"}
                                     </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="text-xs">
-                                    {category.name} on{" "}
-                                    {format(parseISO(cell.date), "MMM d")}:{" "}
-                                    {cell.total.toLocaleString()} {productionUnit}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </td>
+                                  </td>
+                                ))}
+                                <td className="py-0.5 pl-3 text-right tabular-nums text-[11px]">
+                                  {subTotal.toLocaleString()}
+                                </td>
+                                {!disabled && (
+                                  <td className="py-0.5 pl-1">
+                                    {(() => {
+                                      const recentDay = [...history].find((d) =>
+                                        d.entries.some(
+                                          (e) => e.categoryId === category.id && e.subcategoryId === subcategory.id
+                                        )
+                                      );
+                                      if (!recentDay) return null;
+                                      const subEntries = recentDay.entries.filter(
+                                        (e) => e.categoryId === category.id && e.subcategoryId === subcategory.id
+                                      );
+                                      return (
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-4 w-4 p-0"
+                                              onClick={() => onCarryForward(subEntries)}
+                                            >
+                                              <ArrowDownToLine className="h-2.5 w-2.5" />
+                                            </Button>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="left" className="text-xs">
+                                            Copy {subcategory.name} entries to today
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      );
+                                    })()}
+                                  </td>
+                                )}
+                              </tr>
                             ))}
-                            <td className="py-1 pl-3 text-right font-medium tabular-nums">
-                              {rowTotal.toLocaleString()}
-                            </td>
-                          </tr>
+                          </React.Fragment>
                         );
                       })}
                       {/* Grand total row */}
@@ -392,6 +594,7 @@ export function LossContextPanel({
                             )
                             .toLocaleString()}
                         </td>
+                        {!disabled && <td />}
                       </tr>
                     </tbody>
                   </table>
@@ -408,61 +611,84 @@ export function LossContextPanel({
               ) : (
                 <div className="space-y-2">
                   {streaks.map(
-                    ({ category, consecutiveDays, avg, latestAmount, trend }) => (
-                      <div
-                        key={category.id}
-                        className="flex items-center gap-3 rounded-md border px-3 py-2"
-                      >
-                        {/* Streak flame indicator */}
-                        <div
-                          className={cn(
-                            "flex items-center gap-1 min-w-[60px]",
-                            consecutiveDays >= 5
-                              ? "text-red-500"
-                              : consecutiveDays >= 3
-                                ? "text-orange-500"
-                                : "text-muted-foreground"
-                          )}
-                        >
-                          <Flame className="h-3.5 w-3.5" />
-                          <span className="text-sm font-bold tabular-nums">
-                            {consecutiveDays}d
-                          </span>
+                    ({ category, consecutiveDays, avg, latestAmount, trend, subcategoryStreaks }) => (
+                      <div key={category.id} className="rounded-md border overflow-hidden">
+                        <div className="flex items-center gap-3 px-3 py-2">
+                          {/* Streak flame indicator */}
+                          <div
+                            className={cn(
+                              "flex items-center gap-1 min-w-[60px]",
+                              consecutiveDays >= 5
+                                ? "text-red-500"
+                                : consecutiveDays >= 3
+                                  ? "text-orange-500"
+                                  : "text-muted-foreground"
+                            )}
+                          >
+                            <Flame className="h-3.5 w-3.5" />
+                            <span className="text-sm font-bold tabular-nums">
+                              {consecutiveDays}d
+                            </span>
+                          </div>
+
+                          {/* Category name */}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm font-medium">
+                              {category.name}
+                            </span>
+                          </div>
+
+                          {/* Trend arrow */}
+                          <div className="flex items-center gap-2">
+                            {trend === "up" && (
+                              <TrendingUp className="h-3.5 w-3.5 text-red-500" />
+                            )}
+                            {trend === "down" && (
+                              <TrendingDown className="h-3.5 w-3.5 text-green-500" />
+                            )}
+                            {trend === "flat" && (
+                              <Minus className="h-3.5 w-3.5 text-muted-foreground" />
+                            )}
+                          </div>
+
+                          {/* Stats */}
+                          <div className="text-right text-xs text-muted-foreground whitespace-nowrap">
+                            <span className="font-medium text-foreground tabular-nums">
+                              {latestAmount.toLocaleString()}
+                            </span>
+                            <span className="mx-1">last</span>
+                            <span className="text-muted-foreground/70">|</span>
+                            <span className="mx-1">avg</span>
+                            <span className="font-medium text-foreground tabular-nums">
+                              {Math.round(avg).toLocaleString()}
+                            </span>
+                            <span className="ml-0.5">{productionUnit}</span>
+                          </div>
                         </div>
 
-                        {/* Category name */}
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium">
-                            {category.name}
-                          </span>
-                        </div>
-
-                        {/* Trend arrow */}
-                        <div className="flex items-center gap-2">
-                          {trend === "up" && (
-                            <TrendingUp className="h-3.5 w-3.5 text-red-500" />
-                          )}
-                          {trend === "down" && (
-                            <TrendingDown className="h-3.5 w-3.5 text-green-500" />
-                          )}
-                          {trend === "flat" && (
-                            <Minus className="h-3.5 w-3.5 text-muted-foreground" />
-                          )}
-                        </div>
-
-                        {/* Stats */}
-                        <div className="text-right text-xs text-muted-foreground whitespace-nowrap">
-                          <span className="font-medium text-foreground tabular-nums">
-                            {latestAmount.toLocaleString()}
-                          </span>
-                          <span className="mx-1">last</span>
-                          <span className="text-muted-foreground/70">|</span>
-                          <span className="mx-1">avg</span>
-                          <span className="font-medium text-foreground tabular-nums">
-                            {Math.round(avg).toLocaleString()}
-                          </span>
-                          <span className="ml-0.5">{productionUnit}</span>
-                        </div>
+                        {/* Subcategory streaks */}
+                        {subcategoryStreaks.length > 0 && (
+                          <div className="border-t bg-muted/20 px-3 py-1.5 space-y-1">
+                            {subcategoryStreaks.map(({ subcategory, consecutiveDays: subDays, avg: subAvg, latestAmount: subLatest, trend: subTrend }) => (
+                              <div key={subcategory.id} className="flex items-center gap-3 pl-4 text-xs text-muted-foreground">
+                                <span className="min-w-[60px] tabular-nums font-medium">
+                                  {subDays}d
+                                </span>
+                                <span className="flex-1 min-w-0 truncate">
+                                  {subcategory.name}
+                                </span>
+                                <div className="flex items-center">
+                                  {subTrend === "up" && <TrendingUp className="h-3 w-3 text-red-500" />}
+                                  {subTrend === "down" && <TrendingDown className="h-3 w-3 text-green-500" />}
+                                  {subTrend === "flat" && <Minus className="h-3 w-3 text-muted-foreground" />}
+                                </div>
+                                <span className="text-right whitespace-nowrap tabular-nums">
+                                  {subLatest.toLocaleString()} last | avg {Math.round(subAvg).toLocaleString()}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )
                   )}

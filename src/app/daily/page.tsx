@@ -436,7 +436,8 @@ export default function DailyPage() {
       {/* Daily log exists - show full interface */}
       {dailyLog && (
         <>
-          {/* KPI Summary Cards */}
+          {/* KPI Summary Cards - sticky so always visible */}
+          <div className="sticky top-0 z-10 bg-background pt-2 pb-2 -mt-2 -mx-4 px-4 border-b border-transparent [&:not(:first-child)]:border-border/50">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <Card>
               <CardContent className="pt-4 pb-3 px-4">
@@ -512,6 +513,7 @@ export default function DailyPage() {
                 <p className="text-xs text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
+          </div>
           </div>
 
           {/* Loss Context Panel - recent history for reference */}
