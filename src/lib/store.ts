@@ -392,3 +392,38 @@ export function resetStore(): void {
   Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
   initializeStore();
 }
+
+// ─── Recent History (for loss context panel) ─────────────────────
+
+export interface DaySnapshot {
+  date: string;
+  production: number;
+  bar: number;
+  delta: number;
+  status: "open" | "closed";
+  entries: LossEntry[];
+}
+
+/** Get snapshots for the N days preceding (but not including) the given date. */
+export function getRecentHistory(
+  beforeDate: string,
+  days: number = 7
+): DaySnapshot[] {
+  const allLogs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
+  const allEntries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+
+  // Get logs before the target date, sorted most recent first
+  const recentLogs = allLogs
+    .filter((l) => l.date < beforeDate)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, days);
+
+  return recentLogs.map((log) => ({
+    date: log.date,
+    production: log.production,
+    bar: log.bar,
+    delta: log.delta,
+    status: log.status as "open" | "closed",
+    entries: allEntries.filter((e) => e.date === log.date),
+  }));
+}

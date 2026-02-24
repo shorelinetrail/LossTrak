@@ -13,6 +13,8 @@ import {
   createLossEntry,
   updateLossEntry,
   deleteLossEntry,
+  getRecentHistory,
+  type DaySnapshot,
 } from "@/lib/store";
 import {
   LossCategory,
@@ -57,6 +59,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { LossContextPanel } from "@/components/daily/loss-context-panel";
 
 export default function DailyPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -69,6 +72,7 @@ export default function DailyPage() {
 
   const [dailyLog, setDailyLog] = useState<DailyLog | null>(null);
   const [lossEntries, setLossEntries] = useState<LossEntry[]>([]);
+  const [recentHistory, setRecentHistory] = useState<DaySnapshot[]>([]);
 
   const [productionInput, setProductionInput] = useState<string>("");
   const [dayComments, setDayComments] = useState<string>("");
@@ -103,7 +107,7 @@ export default function DailyPage() {
     loadConfig();
   }, []);
 
-  // Load daily log and entries when date changes
+  // Load daily log, entries, and recent history when date changes
   useEffect(() => {
     const loadDailyData = async () => {
       setLoading(true);
@@ -120,6 +124,9 @@ export default function DailyPage() {
           setDayComments("");
           setLossEntries([]);
         }
+        // Load recent history (7 days before selected date)
+        const history = getRecentHistory(dateKey, 7);
+        setRecentHistory(history);
       } catch {
         toast.error("Failed to load daily data.");
       } finally {
@@ -269,6 +276,35 @@ export default function DailyPage() {
       setSaving(false);
     }
   }, [dailyLog, isBalanced, dateKey, dayComments]);
+
+  // Carry forward entries from a previous day (copies structure, zeroes amounts)
+  const handleCarryForward = useCallback(
+    async (previousEntries: LossEntry[]) => {
+      if (!dailyLog || isClosed) return;
+      try {
+        const newEntries: LossEntry[] = [];
+        for (const prev of previousEntries) {
+          const entry = await createLossEntry({
+            dailyLogId: dailyLog.id,
+            date: dateKey,
+            categoryId: prev.categoryId,
+            subcategoryId: prev.subcategoryId,
+            lossType: prev.lossType,
+            amount: 0, // zero - engineer fills in today's values
+            comments: prev.comments,
+          });
+          newEntries.push(entry);
+        }
+        setLossEntries((existing) => [...existing, ...newEntries]);
+        toast.success(
+          `Carried forward ${newEntries.length} loss ${newEntries.length === 1 ? "entry" : "entries"} from previous day. Adjust amounts for today.`
+        );
+      } catch {
+        toast.error("Failed to carry forward entries.");
+      }
+    },
+    [dailyLog, isClosed, dateKey]
+  );
 
   // Get subcategories for a given category
   const getSubcategoriesForCategory = useCallback(
@@ -477,6 +513,16 @@ export default function DailyPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Loss Context Panel - recent history for reference */}
+          <LossContextPanel
+            history={recentHistory}
+            categories={categories}
+            subcategories={subcategories}
+            productionUnit={productionUnit}
+            onCarryForward={handleCarryForward}
+            disabled={isClosed || !dailyLog}
+          />
 
           {/* Production Edit (when not closed) */}
           {!isClosed && (
