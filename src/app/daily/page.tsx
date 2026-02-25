@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/popover";
 import {
   CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
   Plus,
   Trash2,
   CheckCircle2,
@@ -51,7 +53,7 @@ import {
   Lock,
   Unlock,
 } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addDays, subDays, isToday } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LossContextPanel } from "@/components/daily/loss-context-panel";
@@ -359,24 +361,29 @@ export default function DailyPage() {
         <h1 className="text-lg font-semibold tracking-tight">
           Daily Loss Accounting
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {isClosed && (
-            <Badge variant="secondary" className="gap-1">
+            <Badge variant="secondary" className="gap-1 mr-1">
               <Lock className="h-3 w-3" />
               Closed
             </Badge>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                className={cn(
-                  "w-[220px] justify-start text-left font-normal",
-                  !selectedDate && "text-muted-foreground"
-                )}
+                className="h-7 px-2.5 text-xs font-normal"
               >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {format(selectedDate, "EEEE, MMM d, yyyy")}
+                <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                {format(selectedDate, "EEE, MMM d, yyyy")}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
@@ -388,6 +395,24 @@ export default function DailyPage() {
               />
             </PopoverContent>
           </Popover>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {!isToday(selectedDate) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs px-2 ml-0.5"
+              onClick={() => setSelectedDate(new Date())}
+            >
+              Today
+            </Button>
+          )}
         </div>
       </div>
 
