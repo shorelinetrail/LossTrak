@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { format, parseISO, getDay } from "date-fns";
 import {
   ArrowDownToLine,
+  ArrowUpDown,
   CalendarDays,
   ChevronDown,
   ChevronRight,
@@ -125,6 +126,7 @@ export function LossContextPanel({
   );
   const [selectedCell, setSelectedCell] = useState<SelectedCell | null>(null);
   const [insightsExpanded, setInsightsExpanded] = useState(true);
+  const [sortByTotal, setSortByTotal] = useState(false);
 
   // Slice history to selected time range (history is most-recent-first)
   const rangedHistory = useMemo(
@@ -326,7 +328,14 @@ export function LossContextPanel({
               .reduce((sum, e) => sum + e.amount, 0),
           }))
           .filter((b) => b.amount > 0);
-        return { date: day.date, total, subBreakdown };
+        // Collect non-empty comments for this cell
+        const comments = catEntries
+          .filter((e) => e.comments && e.comments.trim().length > 0)
+          .map((e) => ({
+            sub: subcategoryMap[e.subcategoryId]?.name ?? "",
+            text: e.comments,
+          }));
+        return { date: day.date, total, subBreakdown, comments };
       });
 
       const subcategoryRows = catSubs
@@ -352,7 +361,17 @@ export function LossContextPanel({
       return { category: cat, cells, subcategoryRows, sparkValues };
     });
     return { rows, globalMax };
-  }, [categories, subcategories, displayHistory]);
+  }, [categories, subcategories, subcategoryMap, displayHistory]);
+
+  // ─── Sorted rows for rendering
+  const sortedRows = useMemo(() => {
+    if (!sortByTotal) return heatmapData.rows;
+    return [...heatmapData.rows].sort((a, b) => {
+      const totalA = a.cells.reduce((s, c) => s + c.total, 0);
+      const totalB = b.cells.reduce((s, c) => s + c.total, 0);
+      return totalB - totalA;
+    });
+  }, [heatmapData.rows, sortByTotal]);
 
   // ─── Selected Cell Entries ─────────────────────────────
 
@@ -501,7 +520,7 @@ export function LossContextPanel({
             </div>
           )}
 
-          {/* ── Loss Type Filter ─────────────────────────── */}
+          {/* ── Loss Type Filter + Sort ──────────────────── */}
           <div className="flex items-center gap-1">
             {(["all", "shutdown", "slowdown"] as LossTypeFilter[]).map(
               (filter) => (
@@ -519,6 +538,25 @@ export function LossContextPanel({
                 </Button>
               )
             )}
+            <div className="w-px h-4 bg-border mx-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={sortByTotal ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-6 px-2 text-xs gap-1"
+                  onClick={() => setSortByTotal((v) => !v)}
+                >
+                  <ArrowUpDown className="h-3 w-3" />
+                  {sortByTotal ? "By total" : "By order"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {sortByTotal
+                  ? "Sorted by total loss (biggest first). Click for display order."
+                  : "Sorted by display order. Click to sort by total loss."}
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* ── Heatmap Grid ─────────────────────────────── */}
@@ -554,7 +592,7 @@ export function LossContextPanel({
                   </tr>
                 </thead>
                 <tbody>
-                  {heatmapData.rows.map(
+                  {sortedRows.map(
                     ({ category, cells, subcategoryRows, sparkValues }) => {
                       const rowTotal = cells.reduce(
                         (s, c) => s + c.total,
@@ -589,7 +627,7 @@ export function LossContextPanel({
                                   <TooltipTrigger asChild>
                                     <div
                                       className={cn(
-                                        "rounded px-1.5 py-1 text-center tabular-nums transition-colors cursor-pointer",
+                                        "relative rounded px-1.5 py-1 text-center tabular-nums transition-colors cursor-pointer",
                                         cell.total > 0
                                           ? heatColor(
                                               cell.total,
@@ -612,11 +650,14 @@ export function LossContextPanel({
                                       {cell.total > 0
                                         ? cell.total.toLocaleString()
                                         : "\u2014"}
+                                      {cell.comments.length > 0 && (
+                                        <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                      )}
                                     </div>
                                   </TooltipTrigger>
                                   <TooltipContent
                                     side="top"
-                                    className="text-xs"
+                                    className="text-xs max-w-[280px]"
                                   >
                                     <div className="font-medium">
                                       {category.name} &mdash;{" "}
@@ -639,6 +680,20 @@ export function LossContextPanel({
                                             <span className="tabular-nums">
                                               {b.amount.toLocaleString()}
                                             </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {cell.comments.length > 0 && (
+                                      <div className="mt-1 border-t border-border/40 pt-1 space-y-0.5">
+                                        {cell.comments.map((c, i) => (
+                                          <div key={i} className="text-muted-foreground">
+                                            {c.sub && (
+                                              <span className="font-medium text-foreground">
+                                                {c.sub}:{" "}
+                                              </span>
+                                            )}
+                                            <span className="italic">&ldquo;{c.text}&rdquo;</span>
                                           </div>
                                         ))}
                                       </div>
