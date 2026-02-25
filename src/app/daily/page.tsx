@@ -135,7 +135,7 @@ export default function DailyPage() {
           setLossEntries([]);
         }
         // Load recent history (30 days before selected date, panel slices locally)
-        const history = getRecentHistory(dateKey, 30);
+        const history = await getRecentHistory(dateKey, 30);
         setRecentHistory(history);
       } catch {
         toast.error("Failed to load daily data.");
@@ -410,7 +410,7 @@ export default function DailyPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl py-4 px-4 space-y-3">
+    <div className="container mx-auto max-w-5xl py-3 px-4 space-y-2">
       {/* Header with Date Picker */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <h1 className="text-lg font-semibold tracking-tight">
@@ -617,31 +617,26 @@ export default function DailyPage() {
 
           {/* Production Edit (when not closed) */}
           {!isClosed && (
-            <Card>
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 max-w-xs space-y-1">
-                    <Label htmlFor="production-edit" className="text-xs">
-                      Production ({productionUnit})
-                    </Label>
-                    <Input
-                      id="production-edit"
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={productionInput}
-                      onChange={(e) => handleUpdateProduction(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="production-edit" className="text-xs text-muted-foreground whitespace-nowrap">
+                Production ({productionUnit})
+              </Label>
+              <Input
+                id="production-edit"
+                type="number"
+                min="0"
+                step="any"
+                className="h-7 text-xs max-w-[160px]"
+                value={productionInput}
+                onChange={(e) => handleUpdateProduction(e.target.value)}
+              />
+            </div>
           )}
 
           {/* Loss / Gain Entries */}
           <Card>
-            <CardContent>
-              <div className="flex items-center justify-between mb-2">
+            <CardContent className="px-3 py-2">
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm font-medium">
                   {isGainDay ? "Gain" : "Loss"} Entries ({lossEntries.length})
                 </span>
@@ -649,312 +644,339 @@ export default function DailyPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs"
+                    className="h-6 text-xs px-2"
                     onClick={handleAddLossEntry}
                   >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add {isGainDay ? "Gain" : "Loss"}
+                    <Plus className="h-3 w-3 mr-1" />
+                    Add
                   </Button>
                 )}
               </div>
-              <div className="space-y-3">
+
               {lossEntries.length === 0 && (
-                <div className="text-center py-4 text-muted-foreground">
-                  <p>No {isGainDay ? "gain" : "loss"} entries yet.</p>
+                <div className="text-center py-3 text-sm text-muted-foreground">
+                  No {isGainDay ? "gain" : "loss"} entries yet.
                   {!isClosed && (
-                    <p className="text-sm mt-1">
-                      Click &quot;Add {isGainDay ? "Gain" : "Loss"}&quot; to start accounting for the
+                    <span className="block text-xs mt-0.5">
+                      Click &quot;Add&quot; to start accounting for the
                       {isGainDay ? " gain" : " delta"}.
-                    </p>
+                    </span>
                   )}
                 </div>
               )}
 
-              {lossEntries.map((entry, index) => {
-                const filteredSubcategories = getSubcategoriesForCategory(
-                  entry.categoryId
-                );
-                const filteredDetailCodes = entry.subcategoryId
-                  ? getDetailCodesForSubcategory(entry.subcategoryId)
-                  : [];
-                const allowedTypes = getAllowedLossTypes(entry.categoryId);
-                const hasDetailCodes = filteredDetailCodes.length > 0;
+              {lossEntries.length > 0 && (
+                <div>
+                  {/* Column headers (desktop) */}
+                  <div className="hidden md:grid md:grid-cols-12 gap-1.5 mb-1">
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Category</span>
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Subcategory</span>
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Detail Code</span>
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Loss Type</span>
+                    <span className="col-span-1 text-[10px] font-medium text-muted-foreground uppercase">Amount</span>
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Comments</span>
+                    <span className="col-span-1"></span>
+                  </div>
 
-                return (
-                  <div
-                    key={entry.id}
-                    className={cn(
-                      "p-3 rounded-lg border bg-card space-y-2",
-                      isClosed && "opacity-80"
-                    )}
-                  >
-                    {/* Row number (mobile) */}
-                    <div className="md:hidden flex items-center justify-between">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Entry #{index + 1}
-                      </span>
-                      {!isClosed && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => handleDeleteLossEntry(entry.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+                  <div className="space-y-1.5">
+                  {lossEntries.map((entry, index) => {
+                    const filteredSubcategories = getSubcategoriesForCategory(
+                      entry.categoryId
+                    );
+                    const filteredDetailCodes = entry.subcategoryId
+                      ? getDetailCodesForSubcategory(entry.subcategoryId)
+                      : [];
+                    const allowedTypes = getAllowedLossTypes(entry.categoryId);
+                    const hasDetailCodes = filteredDetailCodes.length > 0;
 
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-                      {/* Category */}
-                      <div className="md:col-span-3 space-y-1">
-                        <Label className="text-xs">Category</Label>
-                        <Select
-                          value={entry.categoryId}
-                          onValueChange={(v) =>
-                            handleUpdateLossEntry(entry.id, "categoryId", v)
-                          }
-                          disabled={isClosed}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select category" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>
-                                {cat.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    return (
+                      <div
+                        key={entry.id}
+                        className={cn(
+                          "rounded border border-border/50 p-1.5 md:p-0 md:border-0",
+                          index > 0 && "md:border-t md:border-border/30 md:pt-1.5 md:rounded-none",
+                          isClosed && "opacity-80"
+                        )}
+                      >
+                        {/* Mobile entry label */}
+                        <div className="md:hidden flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-medium text-muted-foreground">
+                            #{index + 1}
+                          </span>
+                          {!isClosed && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteLossEntry(entry.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
 
-                      {/* Subcategory */}
-                      <div className="md:col-span-3 space-y-1">
-                        <Label className="text-xs">Subcategory</Label>
-                        <Select
-                          value={entry.subcategoryId}
-                          onValueChange={(v) =>
-                            handleUpdateLossEntry(entry.id, "subcategoryId", v)
-                          }
-                          disabled={isClosed || !entry.categoryId}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select subcategory" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {filteredSubcategories.map((sub) => (
-                              <SelectItem key={sub.id} value={sub.id}>
-                                {sub.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Loss Type */}
-                      <div className="md:col-span-2 space-y-1">
-                        <Label className="text-xs">Loss Type</Label>
-                        <Select
-                          value={entry.lossType}
-                          onValueChange={(v) =>
-                            handleUpdateLossEntry(entry.id, "lossType", v)
-                          }
-                          disabled={isClosed}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {allowedTypes.map((type) => (
-                              <SelectItem key={type} value={type}>
-                                {type.charAt(0).toUpperCase() + type.slice(1)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Amount with unit conversion */}
-                      {(() => {
-                        const unit = entryUnits[entry.id] || "production";
-                        const unitLabel =
-                          unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
-                        const displayValue =
-                          unit === "production"
-                            ? entry.amount || ""
-                            : entry.amount
-                              ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4))
-                              : "";
-                        return (
-                          <div className="md:col-span-1 space-y-1">
-                            <Label className="text-xs flex items-baseline gap-1">
-                              Amount
-                              <button
-                                type="button"
-                                className="text-[10px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
-                                onClick={() => {
-                                  const order: AmountUnit[] = ["production", "hours", "days"];
-                                  const next = order[(order.indexOf(unit) + 1) % order.length];
-                                  setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
-                                }}
-                                disabled={isClosed}
-                              >
-                                {unitLabel}
-                              </button>
-                            </Label>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="any"
-                              placeholder="0"
-                              value={displayValue}
-                              onChange={(e) => {
-                                const raw = parseFloat(e.target.value) || 0;
-                                const inProdUnits = toProductionUnits(raw, unit);
-                                handleUpdateLossEntry(
-                                  entry.id,
-                                  "amount",
-                                  Math.round(inProdUnits * 100) / 100
-                                );
-                              }}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-1.5">
+                          {/* Category */}
+                          <div className="md:col-span-2">
+                            <Label className="text-[10px] md:hidden">Category</Label>
+                            <Select
+                              value={entry.categoryId}
+                              onValueChange={(v) =>
+                                handleUpdateLossEntry(entry.id, "categoryId", v)
+                              }
                               disabled={isClosed}
-                            />
-                            {unit !== "production" && entry.amount > 0 && (
-                              <p className="text-[10px] text-muted-foreground truncate">
-                                = {entry.amount.toLocaleString()} {productionUnit}
-                              </p>
+                            >
+                              <SelectTrigger className="h-8 text-xs w-full">
+                                <SelectValue placeholder="Category" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {categories.map((cat) => (
+                                  <SelectItem key={cat.id} value={cat.id}>
+                                    {cat.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Subcategory */}
+                          <div className="md:col-span-2">
+                            <Label className="text-[10px] md:hidden">Subcategory</Label>
+                            <Select
+                              value={entry.subcategoryId}
+                              onValueChange={(v) =>
+                                handleUpdateLossEntry(entry.id, "subcategoryId", v)
+                              }
+                              disabled={isClosed || !entry.categoryId}
+                            >
+                              <SelectTrigger className="h-8 text-xs w-full">
+                                <SelectValue placeholder="Subcategory" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {filteredSubcategories.map((sub) => (
+                                  <SelectItem key={sub.id} value={sub.id}>
+                                    {sub.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Detail Code */}
+                          <div className="md:col-span-2">
+                            {hasDetailCodes ? (
+                              <>
+                                <Label className="text-[10px] md:hidden">Detail Code</Label>
+                                <Select
+                                  value={entry.detailCodeId || ""}
+                                  onValueChange={(v) =>
+                                    handleUpdateLossEntry(entry.id, "detailCodeId", v)
+                                  }
+                                  disabled={isClosed}
+                                >
+                                  <SelectTrigger className="h-8 text-xs w-full">
+                                    <SelectValue placeholder="Optional" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {filteredDetailCodes.map((dc) => (
+                                      <SelectItem key={dc.id} value={dc.id}>
+                                        {dc.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </>
+                            ) : (
+                              <div className="hidden md:block" />
                             )}
                           </div>
-                        );
-                      })()}
 
-                      {/* Comments */}
-                      <div className="md:col-span-2 space-y-1">
-                        <Label className="text-xs">Comments</Label>
-                        <Input
-                          placeholder="Notes..."
-                          value={entry.comments ?? ""}
-                          onChange={(e) =>
-                            handleUpdateLossEntry(
-                              entry.id,
-                              "comments",
-                              e.target.value
-                            )
-                          }
-                          disabled={isClosed}
-                        />
-                      </div>
+                          {/* Loss Type */}
+                          <div className="md:col-span-2">
+                            <Label className="text-[10px] md:hidden">Loss Type</Label>
+                            <Select
+                              value={entry.lossType}
+                              onValueChange={(v) =>
+                                handleUpdateLossEntry(entry.id, "lossType", v)
+                              }
+                              disabled={isClosed}
+                            >
+                              <SelectTrigger className="h-8 text-xs w-full">
+                                <SelectValue placeholder="Type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allowedTypes.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
 
-                      {/* Delete button (desktop) */}
-                      <div className="hidden md:flex md:col-span-1 items-end justify-center pb-0.5">
-                        {!isClosed && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDeleteLossEntry(entry.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                          {/* Amount with unit conversion */}
+                          {(() => {
+                            const unit = entryUnits[entry.id] || "production";
+                            const unitLabel =
+                              unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
+                            const displayValue =
+                              unit === "production"
+                                ? entry.amount || ""
+                                : entry.amount
+                                  ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4))
+                                  : "";
+                            return (
+                              <div className="md:col-span-1">
+                                <Label className="text-[10px] md:hidden flex items-baseline gap-1">
+                                  Amount
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-muted-foreground underline decoration-dotted"
+                                    onClick={() => {
+                                      const order: AmountUnit[] = ["production", "hours", "days"];
+                                      const next = order[(order.indexOf(unit) + 1) % order.length];
+                                      setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
+                                    }}
+                                    disabled={isClosed}
+                                  >
+                                    {unitLabel}
+                                  </button>
+                                </Label>
+                                <div className="relative">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0"
+                                    className="h-8 text-xs"
+                                    value={displayValue}
+                                    onChange={(e) => {
+                                      const raw = parseFloat(e.target.value) || 0;
+                                      const inProdUnits = toProductionUnits(raw, unit);
+                                      handleUpdateLossEntry(
+                                        entry.id,
+                                        "amount",
+                                        Math.round(inProdUnits * 100) / 100
+                                      );
+                                    }}
+                                    disabled={isClosed}
+                                  />
+                                  {/* Desktop unit toggle */}
+                                  <button
+                                    type="button"
+                                    className="hidden md:block absolute -top-3.5 right-0 text-[9px] text-muted-foreground underline decoration-dotted hover:text-foreground"
+                                    onClick={() => {
+                                      const order: AmountUnit[] = ["production", "hours", "days"];
+                                      const next = order[(order.indexOf(unit) + 1) % order.length];
+                                      setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
+                                    }}
+                                    disabled={isClosed}
+                                  >
+                                    {unitLabel}
+                                  </button>
+                                </div>
+                                {unit !== "production" && entry.amount > 0 && (
+                                  <p className="text-[9px] text-muted-foreground truncate">
+                                    = {entry.amount.toLocaleString()} {productionUnit}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
 
-                      {/* Detail Code - grid row 2, aligned under Subcategory */}
-                      {hasDetailCodes && (
-                        <div className="md:col-start-4 md:col-span-3 space-y-1">
-                          <Label className="text-xs">Detail Code</Label>
-                          <Select
-                            value={entry.detailCodeId || ""}
-                            onValueChange={(v) =>
-                              handleUpdateLossEntry(entry.id, "detailCodeId", v)
-                            }
-                            disabled={isClosed}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredDetailCodes.map((dc) => (
-                                <SelectItem key={dc.id} value={dc.id}>
-                                  {dc.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {/* Comments */}
+                          <div className="md:col-span-2">
+                            <Label className="text-[10px] md:hidden">Comments</Label>
+                            <Input
+                              placeholder="Notes..."
+                              className="h-8 text-xs"
+                              value={entry.comments ?? ""}
+                              onChange={(e) =>
+                                handleUpdateLossEntry(
+                                  entry.id,
+                                  "comments",
+                                  e.target.value
+                                )
+                              }
+                              disabled={isClosed}
+                            />
+                          </div>
+
+                          {/* Delete button (desktop) */}
+                          <div className="hidden md:flex md:col-span-1 items-center justify-center">
+                            {!isClosed && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteLossEntry(entry.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    );
+                  })}
                   </div>
-                );
-              })}
 
-              {lossEntries.length > 0 && !isClosed && (
-                <div className="flex justify-center pt-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={handleAddLossEntry}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add Another Loss
-                  </Button>
+                  {!isClosed && (
+                    <div className="flex justify-center pt-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs text-muted-foreground"
+                        onClick={handleAddLossEntry}
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add another
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
-              </div>
             </CardContent>
           </Card>
 
-          {/* Day Comments */}
+          {/* Day Comments + Close */}
           <Card>
-            <CardContent>
-              <Label className="text-xs text-muted-foreground">Day Comments</Label>
-              <Textarea
-                placeholder="Overall notes for this day..."
-                value={dayComments}
-                onChange={(e) => handleDayCommentsChange(e.target.value)}
-                disabled={isClosed}
-                rows={2}
-                className="mt-1"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Close Day Action */}
-          {!isClosed && (
-            <Card>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-                  <div className="text-center sm:text-left">
-                    <p className="text-sm font-medium">
-                      {isBalanced
-                        ? `All ${isGainDay ? "gains" : "losses"} accounted for. Ready to close.`
-                        : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining.`}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {isBalanced
-                        ? "Closing locks all entries from further edits."
-                        : `All ${isGainDay ? "gains" : "losses"} must be accounted for first.`}
-                    </p>
-                  </div>
+            <CardContent className="px-3 py-2 space-y-2">
+              <div>
+                <Label className="text-[10px] text-muted-foreground uppercase">Day Comments</Label>
+                <Textarea
+                  placeholder="Overall notes for this day..."
+                  value={dayComments}
+                  onChange={(e) => handleDayCommentsChange(e.target.value)}
+                  disabled={isClosed}
+                  rows={2}
+                  className="mt-0.5 text-xs"
+                />
+              </div>
+              {!isClosed && (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {isBalanced
+                      ? "Ready to close."
+                      : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining.`}
+                  </p>
                   <Button
                     size="sm"
                     onClick={handleCloseDay}
                     disabled={!isBalanced || saving}
                     className={cn(
-                      "min-w-[120px]",
+                      "h-7 text-xs",
                       isBalanced &&
                         "bg-green-600 hover:bg-green-700 text-white"
                     )}
                   >
-                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
                     Close Day
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
           {/* Closed Day Banner */}
           {isClosed && (

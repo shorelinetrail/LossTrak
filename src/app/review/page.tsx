@@ -51,9 +51,10 @@ export default function ReviewPage() {
   const [productionUnit, setProductionUnit] = useState<string>("units");
 
   useEffect(() => {
-    const dailyLogs = getDailyLogs();
-    const lossEntries = getAllLossEntries();
-    const unit = getProductionUnit();
+    async function load() {
+    const dailyLogs = await getDailyLogs();
+    const lossEntries = await getAllLossEntries();
+    const unit = await getProductionUnit();
     setProductionUnit(unit);
 
     const enrichedLogs: LogWithDetails[] = dailyLogs.map((log) => {
@@ -78,6 +79,8 @@ export default function ReviewPage() {
     );
 
     setLogs(enrichedLogs);
+    }
+    load();
   }, []);
 
   const filteredLogs = useMemo(() => {

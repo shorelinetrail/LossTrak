@@ -97,31 +97,37 @@ export default function MonthlyReportPage() {
   }, []);
 
   useEffect(() => {
-    const unit = getProductionUnit();
-    if (unit) setProductionUnit(unit);
+    async function load() {
+      const unit = await getProductionUnit();
+      if (unit) setProductionUnit(unit);
 
-    const cats = getCategories();
-    setCategories(cats);
+      const cats = await getCategories();
+      setCategories(cats);
 
-    const subs = getSubcategories();
-    setSubcategories(subs);
+      const subs = await getSubcategories();
+      setSubcategories(subs);
+    }
+    load();
   }, []);
 
   useEffect(() => {
-    const monthStart = startOfMonth(new Date(selectedYear, selectedMonth, 1));
-    const monthEnd = endOfMonth(monthStart);
-    const startStr = format(monthStart, "yyyy-MM-dd");
-    const endStr = format(monthEnd, "yyyy-MM-dd");
+    async function load() {
+      const monthStart = startOfMonth(new Date(selectedYear, selectedMonth, 1));
+      const monthEnd = endOfMonth(monthStart);
+      const startStr = format(monthStart, "yyyy-MM-dd");
+      const endStr = format(monthEnd, "yyyy-MM-dd");
 
-    const logs = getDailyLogsByDateRange(startStr, endStr);
-    setDailyLogs(logs);
+      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      setDailyLogs(logs);
 
-    const allLosses = getAllLossEntries();
-    const filtered = allLosses.filter((entry) => {
-      const entryDate = parseISO(entry.date);
-      return entryDate >= monthStart && entryDate <= monthEnd;
-    });
-    setAllLossEntries(filtered);
+      const allLosses = await getAllLossEntries();
+      const filtered = allLosses.filter((entry) => {
+        const entryDate = parseISO(entry.date);
+        return entryDate >= monthStart && entryDate <= monthEnd;
+      });
+      setAllLossEntries(filtered);
+    }
+    load();
   }, [selectedMonth, selectedYear]);
 
   const daysInMonth = useMemo(() => {

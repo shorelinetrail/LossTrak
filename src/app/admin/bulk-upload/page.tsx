@@ -73,10 +73,13 @@ export default function BulkUploadPage() {
   const [results, setResults] = useState<ImportResult[] | null>(null);
 
   useEffect(() => {
-    setCategories(getCategories());
-    setSubcategories(getSubcategories());
-    setBar(getBarRate());
-    setProductionUnit(getProductionUnit());
+    const load = async () => {
+      setCategories(await getCategories());
+      setSubcategories(await getSubcategories());
+      setBar(await getBarRate());
+      setProductionUnit(await getProductionUnit());
+    };
+    load();
   }, []);
 
   // Build lookup maps (case-insensitive)
@@ -213,18 +216,18 @@ export default function BulkUploadPage() {
         const production = rows[0].production;
 
         // Check if daily log exists
-        let log = getDailyLog(date);
+        let log = await getDailyLog(date);
         let status: ImportResult["status"] = "created";
 
         if (log) {
           // Update production if different
           if (log.production !== production) {
-            updateDailyLog(date, { production });
+            await updateDailyLog(date, { production });
           }
           status = "updated";
         } else {
           // Create daily log
-          log = createDailyLog({
+          log = await createDailyLog({
             date,
             production,
             bar,
@@ -234,7 +237,7 @@ export default function BulkUploadPage() {
         }
 
         // Get existing entries for this date
-        const existingEntries = getLossEntries(date);
+        const existingEntries = await getLossEntries(date);
         let entriesCreated = 0;
 
         for (const row of rows) {
@@ -256,7 +259,7 @@ export default function BulkUploadPage() {
 
           if (isDuplicate) continue;
 
-          createLossEntry({
+          await createLossEntry({
             dailyLogId: log.id,
             date,
             categoryId: cat.id,

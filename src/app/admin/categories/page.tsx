@@ -86,10 +86,10 @@ export default function CategoriesPage() {
   const [editDetailCodeName, setEditDetailCodeName] = useState("");
   const [editDetailCodeOrder, setEditDetailCodeOrder] = useState(0);
 
-  const loadData = useCallback(() => {
-    const allCategories = getAllCategories();
-    const allSubcategories = getAllSubcategories();
-    const allDetailCodes = getAllDetailCodes();
+  const loadData = useCallback(async () => {
+    const allCategories = await getAllCategories();
+    const allSubcategories = await getAllSubcategories();
+    const allDetailCodes = await getAllDetailCodes();
     setCategories(allCategories);
     setSubcategories(allSubcategories);
     setDetailCodes(allDetailCodes);
@@ -133,7 +133,7 @@ export default function CategoriesPage() {
 
   // --- Category Actions ---
 
-  const handleAddCategory = () => {
+  const handleAddCategory = async () => {
     if (!newCategoryName.trim()) {
       toast.error("Category name is required.");
       return;
@@ -148,7 +148,7 @@ export default function CategoriesPage() {
       return;
     }
 
-    createCategory({
+    await createCategory({
       name: newCategoryName.trim(),
       allowedLossTypes: allowedTypes,
       displayOrder: newCategoryOrder,
@@ -161,7 +161,7 @@ export default function CategoriesPage() {
     setNewCategorySlowdown(true);
     setNewCategoryOrder(0);
     setAddCategoryOpen(false);
-    loadData();
+    await loadData();
   };
 
   const handleEditCategoryOpen = (category: LossCategory) => {
@@ -173,7 +173,7 @@ export default function CategoriesPage() {
     setEditCategoryOpen(true);
   };
 
-  const handleEditCategorySave = () => {
+  const handleEditCategorySave = async () => {
     if (!editingCategory) return;
 
     if (!editCategoryName.trim()) {
@@ -190,7 +190,7 @@ export default function CategoriesPage() {
       return;
     }
 
-    updateCategory(editingCategory.id, {
+    await updateCategory(editingCategory.id, {
       name: editCategoryName.trim(),
       allowedLossTypes: allowedTypes,
       displayOrder: editCategoryOrder,
@@ -199,18 +199,18 @@ export default function CategoriesPage() {
     toast.success(`Category "${editCategoryName.trim()}" updated.`);
     setEditCategoryOpen(false);
     setEditingCategory(null);
-    loadData();
+    await loadData();
   };
 
-  const handleToggleCategoryActive = (category: LossCategory) => {
-    updateCategory(category.id, { isActive: !category.isActive });
+  const handleToggleCategoryActive = async (category: LossCategory) => {
+    await updateCategory(category.id, { isActive: !category.isActive });
     toast.success(
       `Category "${category.name}" ${category.isActive ? "deactivated" : "activated"}.`
     );
-    loadData();
+    await loadData();
   };
 
-  const handleDeleteCategory = (category: LossCategory) => {
+  const handleDeleteCategory = async (category: LossCategory) => {
     const catSubcategories = getSubcategoriesForCategory(category.id);
     if (catSubcategories.length > 0) {
       toast.error(
@@ -218,9 +218,9 @@ export default function CategoriesPage() {
       );
       return;
     }
-    deleteCategory(category.id);
+    await deleteCategory(category.id);
     toast.success(`Category "${category.name}" deleted.`);
-    loadData();
+    await loadData();
   };
 
   // --- Subcategory Actions ---
@@ -232,13 +232,13 @@ export default function CategoriesPage() {
     setAddSubcategoryOpen(true);
   };
 
-  const handleAddSubcategory = () => {
+  const handleAddSubcategory = async () => {
     if (!newSubcategoryName.trim()) {
       toast.error("Subcategory name is required.");
       return;
     }
 
-    createSubcategory({
+    await createSubcategory({
       categoryId: addSubcategoryParentId,
       name: newSubcategoryName.trim(),
       displayOrder: newSubcategoryOrder,
@@ -249,7 +249,7 @@ export default function CategoriesPage() {
     setNewSubcategoryName("");
     setNewSubcategoryOrder(0);
     setAddSubcategoryOpen(false);
-    loadData();
+    await loadData();
   };
 
   const handleEditSubcategoryOpen = (subcategory: LossSubcategory) => {
@@ -259,7 +259,7 @@ export default function CategoriesPage() {
     setEditSubcategoryOpen(true);
   };
 
-  const handleEditSubcategorySave = () => {
+  const handleEditSubcategorySave = async () => {
     if (!editingSubcategory) return;
 
     if (!editSubcategoryName.trim()) {
@@ -267,7 +267,7 @@ export default function CategoriesPage() {
       return;
     }
 
-    updateSubcategory(editingSubcategory.id, {
+    await updateSubcategory(editingSubcategory.id, {
       name: editSubcategoryName.trim(),
       displayOrder: editSubcategoryOrder,
     });
@@ -275,18 +275,18 @@ export default function CategoriesPage() {
     toast.success(`Subcategory "${editSubcategoryName.trim()}" updated.`);
     setEditSubcategoryOpen(false);
     setEditingSubcategory(null);
-    loadData();
+    await loadData();
   };
 
-  const handleToggleSubcategoryActive = (subcategory: LossSubcategory) => {
-    updateSubcategory(subcategory.id, { isActive: !subcategory.isActive });
+  const handleToggleSubcategoryActive = async (subcategory: LossSubcategory) => {
+    await updateSubcategory(subcategory.id, { isActive: !subcategory.isActive });
     toast.success(
       `Subcategory "${subcategory.name}" ${subcategory.isActive ? "deactivated" : "activated"}.`
     );
-    loadData();
+    await loadData();
   };
 
-  const handleDeleteSubcategory = (subcategory: LossSubcategory) => {
+  const handleDeleteSubcategory = async (subcategory: LossSubcategory) => {
     const subDetailCodes = getDetailCodesForSubcategory(subcategory.id);
     if (subDetailCodes.length > 0) {
       toast.error(
@@ -294,9 +294,9 @@ export default function CategoriesPage() {
       );
       return;
     }
-    deleteSubcategory(subcategory.id);
+    await deleteSubcategory(subcategory.id);
     toast.success(`Subcategory "${subcategory.name}" deleted.`);
-    loadData();
+    await loadData();
   };
 
   // --- Detail Code Actions ---
@@ -308,13 +308,13 @@ export default function CategoriesPage() {
     setAddDetailCodeOpen(true);
   };
 
-  const handleAddDetailCode = () => {
+  const handleAddDetailCode = async () => {
     if (!newDetailCodeName.trim()) {
       toast.error("Detail code name is required.");
       return;
     }
 
-    createDetailCode({
+    await createDetailCode({
       subcategoryId: addDetailCodeParentId,
       name: newDetailCodeName.trim(),
       displayOrder: newDetailCodeOrder,
@@ -325,7 +325,7 @@ export default function CategoriesPage() {
     setNewDetailCodeName("");
     setNewDetailCodeOrder(0);
     setAddDetailCodeOpen(false);
-    loadData();
+    await loadData();
   };
 
   const handleEditDetailCodeOpen = (detailCode: LossDetailCode) => {
@@ -335,7 +335,7 @@ export default function CategoriesPage() {
     setEditDetailCodeOpen(true);
   };
 
-  const handleEditDetailCodeSave = () => {
+  const handleEditDetailCodeSave = async () => {
     if (!editingDetailCode) return;
 
     if (!editDetailCodeName.trim()) {
@@ -343,7 +343,7 @@ export default function CategoriesPage() {
       return;
     }
 
-    updateDetailCode(editingDetailCode.id, {
+    await updateDetailCode(editingDetailCode.id, {
       name: editDetailCodeName.trim(),
       displayOrder: editDetailCodeOrder,
     });
@@ -351,21 +351,21 @@ export default function CategoriesPage() {
     toast.success(`Detail code "${editDetailCodeName.trim()}" updated.`);
     setEditDetailCodeOpen(false);
     setEditingDetailCode(null);
-    loadData();
+    await loadData();
   };
 
-  const handleToggleDetailCodeActive = (detailCode: LossDetailCode) => {
-    updateDetailCode(detailCode.id, { isActive: !detailCode.isActive });
+  const handleToggleDetailCodeActive = async (detailCode: LossDetailCode) => {
+    await updateDetailCode(detailCode.id, { isActive: !detailCode.isActive });
     toast.success(
       `Detail code "${detailCode.name}" ${detailCode.isActive ? "deactivated" : "activated"}.`
     );
-    loadData();
+    await loadData();
   };
 
-  const handleDeleteDetailCode = (detailCode: LossDetailCode) => {
-    deleteDetailCode(detailCode.id);
+  const handleDeleteDetailCode = async (detailCode: LossDetailCode) => {
+    await deleteDetailCode(detailCode.id);
     toast.success(`Detail code "${detailCode.name}" deleted.`);
-    loadData();
+    await loadData();
   };
 
   return (

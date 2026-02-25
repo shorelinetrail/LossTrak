@@ -93,34 +93,40 @@ export default function QuarterlyReportPage() {
   }, []);
 
   useEffect(() => {
-    const unit = getProductionUnit();
-    if (unit) setProductionUnit(unit);
+    async function load() {
+      const unit = await getProductionUnit();
+      if (unit) setProductionUnit(unit);
 
-    const cats = getCategories();
-    setCategories(cats);
+      const cats = await getCategories();
+      setCategories(cats);
 
-    const subs = getSubcategories();
-    setSubcategories(subs);
+      const subs = await getSubcategories();
+      setSubcategories(subs);
+    }
+    load();
   }, []);
 
   useEffect(() => {
-    const startMonth = getQuarterStartMonth(selectedQuarter);
-    const quarterStart = startOfQuarter(
-      new Date(selectedYear, startMonth, 1)
-    );
-    const quarterEnd = endOfQuarter(quarterStart);
-    const startStr = format(quarterStart, "yyyy-MM-dd");
-    const endStr = format(quarterEnd, "yyyy-MM-dd");
+    async function load() {
+      const startMonth = getQuarterStartMonth(selectedQuarter);
+      const quarterStart = startOfQuarter(
+        new Date(selectedYear, startMonth, 1)
+      );
+      const quarterEnd = endOfQuarter(quarterStart);
+      const startStr = format(quarterStart, "yyyy-MM-dd");
+      const endStr = format(quarterEnd, "yyyy-MM-dd");
 
-    const logs = getDailyLogsByDateRange(startStr, endStr);
-    setDailyLogs(logs);
+      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      setDailyLogs(logs);
 
-    const allLosses = getAllLossEntries();
-    const filtered = allLosses.filter((entry) => {
-      const entryDate = parseISO(entry.date);
-      return entryDate >= quarterStart && entryDate <= quarterEnd;
-    });
-    setLossEntries(filtered);
+      const allLosses = await getAllLossEntries();
+      const filtered = allLosses.filter((entry) => {
+        const entryDate = parseISO(entry.date);
+        return entryDate >= quarterStart && entryDate <= quarterEnd;
+      });
+      setLossEntries(filtered);
+    }
+    load();
   }, [selectedQuarter, selectedYear]);
 
   const monthsInQuarter = useMemo(() => {

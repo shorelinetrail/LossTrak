@@ -83,31 +83,37 @@ export default function YearlyReportPage() {
   }, []);
 
   useEffect(() => {
-    const unit = getProductionUnit();
-    if (unit) setProductionUnit(unit);
+    async function load() {
+      const unit = await getProductionUnit();
+      if (unit) setProductionUnit(unit);
 
-    const cats = getCategories();
-    setCategories(cats);
+      const cats = await getCategories();
+      setCategories(cats);
 
-    const subs = getSubcategories();
-    setSubcategories(subs);
+      const subs = await getSubcategories();
+      setSubcategories(subs);
+    }
+    load();
   }, []);
 
   useEffect(() => {
-    const yearStart = startOfYear(new Date(selectedYear, 0, 1));
-    const yearEnd = endOfYear(yearStart);
-    const startStr = format(yearStart, "yyyy-MM-dd");
-    const endStr = format(yearEnd, "yyyy-MM-dd");
+    async function load() {
+      const yearStart = startOfYear(new Date(selectedYear, 0, 1));
+      const yearEnd = endOfYear(yearStart);
+      const startStr = format(yearStart, "yyyy-MM-dd");
+      const endStr = format(yearEnd, "yyyy-MM-dd");
 
-    const logs = getDailyLogsByDateRange(startStr, endStr);
-    setDailyLogs(logs);
+      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      setDailyLogs(logs);
 
-    const allLosses = getAllLossEntries();
-    const filtered = allLosses.filter((entry) => {
-      const entryDate = parseISO(entry.date);
-      return entryDate >= yearStart && entryDate <= yearEnd;
-    });
-    setLossEntries(filtered);
+      const allLosses = await getAllLossEntries();
+      const filtered = allLosses.filter((entry) => {
+        const entryDate = parseISO(entry.date);
+        return entryDate >= yearStart && entryDate <= yearEnd;
+      });
+      setLossEntries(filtered);
+    }
+    load();
   }, [selectedYear]);
 
   const monthsInYear = useMemo(() => {

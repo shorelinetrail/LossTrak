@@ -15,12 +15,17 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const currentBar = getBarRate();
-    const currentUnit = getProductionUnit();
-    const currentHours = getOperatingHours();
-    setBarRate(currentBar);
-    setProductionUnit(currentUnit);
-    setOperatingHours(currentHours);
+    async function load() {
+      const [currentBar, currentUnit, currentHours] = await Promise.all([
+        getBarRate(),
+        getProductionUnit(),
+        getOperatingHours(),
+      ]);
+      setBarRate(currentBar);
+      setProductionUnit(currentUnit);
+      setOperatingHours(currentHours);
+    }
+    load();
   }, []);
 
   const handleSave = async () => {
@@ -42,9 +47,9 @@ export default function SettingsPage() {
         return;
       }
 
-      setConfig("bar_rate", barRate);
-      setConfig("production_unit", productionUnit.trim());
-      setConfig("operating_hours", operatingHours);
+      await setConfig("bar_rate", barRate);
+      await setConfig("production_unit", productionUnit.trim());
+      await setConfig("operating_hours", operatingHours);
       toast.success("Settings saved successfully.");
     } catch {
       toast.error("Failed to save settings. Please try again.");
