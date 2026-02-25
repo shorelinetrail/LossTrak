@@ -676,7 +676,7 @@ export default function DailyPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
                       {/* Category */}
-                      <div className={cn("space-y-1", hasDetailCodes ? "md:col-span-2" : "md:col-span-3")}>
+                      <div className="md:col-span-3 space-y-1">
                         <Label className="text-xs">Category</Label>
                         <Select
                           value={entry.categoryId}
@@ -699,7 +699,7 @@ export default function DailyPage() {
                       </div>
 
                       {/* Subcategory */}
-                      <div className={cn("space-y-1", hasDetailCodes ? "md:col-span-2" : "md:col-span-3")}>
+                      <div className="md:col-span-3 space-y-1">
                         <Label className="text-xs">Subcategory</Label>
                         <Select
                           value={entry.subcategoryId}
@@ -720,31 +720,6 @@ export default function DailyPage() {
                           </SelectContent>
                         </Select>
                       </div>
-
-                      {/* Detail Code - inline when subcategory has detail codes */}
-                      {hasDetailCodes && (
-                        <div className="md:col-span-2 space-y-1">
-                          <Label className="text-xs">Detail Code</Label>
-                          <Select
-                            value={entry.detailCodeId || ""}
-                            onValueChange={(v) =>
-                              handleUpdateLossEntry(entry.id, "detailCodeId", v)
-                            }
-                            disabled={isClosed}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Optional" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {filteredDetailCodes.map((dc) => (
-                                <SelectItem key={dc.id} value={dc.id}>
-                                  {dc.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
 
                       {/* Loss Type */}
                       <div className="md:col-span-2 space-y-1">
@@ -821,6 +796,31 @@ export default function DailyPage() {
                           </Button>
                         )}
                       </div>
+
+                      {/* Detail Code - grid row 2, aligned under Subcategory */}
+                      {hasDetailCodes && (
+                        <div className="md:col-start-4 md:col-span-3 space-y-1">
+                          <Label className="text-xs">Detail Code</Label>
+                          <Select
+                            value={entry.detailCodeId || ""}
+                            onValueChange={(v) =>
+                              handleUpdateLossEntry(entry.id, "detailCodeId", v)
+                            }
+                            disabled={isClosed}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Optional" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredDetailCodes.map((dc) => (
+                                <SelectItem key={dc.id} value={dc.id}>
+                                  {dc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
