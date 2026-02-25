@@ -23,6 +23,18 @@ CREATE TABLE loss_subcategories (
 
 CREATE INDEX idx_loss_subcategories_category ON loss_subcategories(category_id);
 
+-- ─── Loss Detail Codes ──────────────────────────────────────────────
+CREATE TABLE loss_detail_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  subcategory_id UUID NOT NULL REFERENCES loss_subcategories(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_loss_detail_codes_subcategory ON loss_detail_codes(subcategory_id);
+
 -- ─── Daily Logs ─────────────────────────────────────────────────────
 CREATE TABLE daily_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,6 +57,7 @@ CREATE TABLE loss_entries (
   daily_log_id UUID NOT NULL REFERENCES daily_logs(id) ON DELETE CASCADE,
   category_id UUID NOT NULL REFERENCES loss_categories(id),
   subcategory_id UUID NOT NULL REFERENCES loss_subcategories(id),
+  detail_code_id UUID REFERENCES loss_detail_codes(id),
   loss_type TEXT NOT NULL CHECK (loss_type IN ('shutdown', 'slowdown')),
   amount NUMERIC NOT NULL DEFAULT 0 CHECK (amount >= 0),
   comments TEXT NOT NULL DEFAULT '',

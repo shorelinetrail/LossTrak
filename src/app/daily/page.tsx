@@ -6,6 +6,7 @@ import {
   getProductionUnit,
   getCategories,
   getSubcategories,
+  getDetailCodes,
   getDailyLog,
   createDailyLog,
   updateDailyLog,
@@ -19,6 +20,7 @@ import {
 import {
   LossCategory,
   LossSubcategory,
+  LossDetailCode,
   LossEntry,
   DailyLog,
   LossType,
@@ -66,6 +68,7 @@ export default function DailyPage() {
   const [productionUnit, setProductionUnit] = useState<string>("units");
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
+  const [detailCodes, setDetailCodes] = useState<LossDetailCode[]>([]);
 
   const [dailyLog, setDailyLog] = useState<DailyLog | null>(null);
   const [lossEntries, setLossEntries] = useState<LossEntry[]>([]);
@@ -87,16 +90,18 @@ export default function DailyPage() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const [barVal, unit, cats, subs] = await Promise.all([
+        const [barVal, unit, cats, subs, codes] = await Promise.all([
           getBarRate(),
           getProductionUnit(),
           getCategories(),
           getSubcategories(),
+          getDetailCodes(),
         ]);
         setBar(barVal);
         setProductionUnit(unit);
         setCategories(cats);
         setSubcategories(subs);
+        setDetailCodes(codes);
       } catch {
         toast.error("Failed to load configuration data.");
       }
@@ -210,6 +215,7 @@ export default function DailyPage() {
         date: dateKey,
         categoryId: "",
         subcategoryId: "",
+        detailCodeId: "",
         lossType: "shutdown" as LossType,
         amount: 0,
         comments: "",
@@ -227,9 +233,14 @@ export default function DailyPage() {
         prev.map((e) => {
           if (e.id !== entryId) return e;
           const updated = { ...e, [field]: value };
-          // Reset subcategory when category changes
+          // Reset subcategory and detail code when category changes
           if (field === "categoryId") {
             updated.subcategoryId = "";
+            updated.detailCodeId = "";
+          }
+          // Reset detail code when subcategory changes
+          if (field === "subcategoryId") {
+            updated.detailCodeId = "";
           }
           return updated;
         })
@@ -238,6 +249,10 @@ export default function DailyPage() {
         const updateData: Record<string, string | number> = { [field]: value };
         if (field === "categoryId") {
           updateData.subcategoryId = "";
+          updateData.detailCodeId = "";
+        }
+        if (field === "subcategoryId") {
+          updateData.detailCodeId = "";
         }
         await updateLossEntry(entryId, updateData);
       } catch {
@@ -303,6 +318,7 @@ export default function DailyPage() {
             date: dateKey,
             categoryId: prev.categoryId,
             subcategoryId: prev.subcategoryId,
+            detailCodeId: prev.detailCodeId ?? "",
             lossType: prev.lossType,
             amount: 0, // zero - engineer fills in today's values
             comments: prev.comments,
@@ -326,6 +342,14 @@ export default function DailyPage() {
       return subcategories.filter((s) => s.categoryId === categoryId);
     },
     [subcategories]
+  );
+
+  // Get detail codes for a given subcategory
+  const getDetailCodesForSubcategory = useCallback(
+    (subcategoryId: string): LossDetailCode[] => {
+      return detailCodes.filter((d) => d.subcategoryId === subcategoryId);
+    },
+    [detailCodes]
   );
 
   // Get allowed loss types for a category
@@ -619,18 +643,22 @@ export default function DailyPage() {
                 const filteredSubcategories = getSubcategoriesForCategory(
                   entry.categoryId
                 );
+                const filteredDetailCodes = entry.subcategoryId
+                  ? getDetailCodesForSubcategory(entry.subcategoryId)
+                  : [];
                 const allowedTypes = getAllowedLossTypes(entry.categoryId);
+                const hasDetailCodes = filteredDetailCodes.length > 0;
 
                 return (
                   <div
                     key={entry.id}
                     className={cn(
-                      "grid grid-cols-1 md:grid-cols-12 gap-2 p-3 rounded-lg border bg-card",
+                      "p-3 rounded-lg border bg-card space-y-2",
                       isClosed && "opacity-80"
                     )}
                   >
-                    {/* Row number */}
-                    <div className="md:col-span-12 flex items-center justify-between md:hidden">
+                    {/* Row number (mobile) */}
+                    <div className="md:hidden flex items-center justify-between">
                       <span className="text-xs font-medium text-muted-foreground">
                         Entry #{index + 1}
                       </span>
@@ -646,127 +674,156 @@ export default function DailyPage() {
                       )}
                     </div>
 
-                    {/* Category */}
-                    <div className="md:col-span-3 space-y-1">
-                      <Label className="text-xs">Category</Label>
-                      <Select
-                        value={entry.categoryId}
-                        onValueChange={(v) =>
-                          handleUpdateLossEntry(entry.id, "categoryId", v)
-                        }
-                        disabled={isClosed}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select category" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Subcategory */}
-                    <div className="md:col-span-3 space-y-1">
-                      <Label className="text-xs">Subcategory</Label>
-                      <Select
-                        value={entry.subcategoryId}
-                        onValueChange={(v) =>
-                          handleUpdateLossEntry(entry.id, "subcategoryId", v)
-                        }
-                        disabled={isClosed || !entry.categoryId}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select subcategory" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {filteredSubcategories.map((sub) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Loss Type */}
-                    <div className="md:col-span-2 space-y-1">
-                      <Label className="text-xs">Loss Type</Label>
-                      <Select
-                        value={entry.lossType}
-                        onValueChange={(v) =>
-                          handleUpdateLossEntry(entry.id, "lossType", v)
-                        }
-                        disabled={isClosed}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allowedTypes.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {type.charAt(0).toUpperCase() + type.slice(1)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Amount */}
-                    <div className="md:col-span-1 space-y-1">
-                      <Label className="text-xs">
-                        Amount
-                      </Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="any"
-                        placeholder="0"
-                        value={entry.amount || ""}
-                        onChange={(e) =>
-                          handleUpdateLossEntry(
-                            entry.id,
-                            "amount",
-                            parseFloat(e.target.value) || 0
-                          )
-                        }
-                        disabled={isClosed}
-                      />
-                    </div>
-
-                    {/* Comments */}
-                    <div className="md:col-span-2 space-y-1">
-                      <Label className="text-xs">Comments</Label>
-                      <Input
-                        placeholder="Notes..."
-                        value={entry.comments ?? ""}
-                        onChange={(e) =>
-                          handleUpdateLossEntry(
-                            entry.id,
-                            "comments",
-                            e.target.value
-                          )
-                        }
-                        disabled={isClosed}
-                      />
-                    </div>
-
-                    {/* Delete button (desktop) */}
-                    <div className="hidden md:flex md:col-span-1 items-end justify-center pb-0.5">
-                      {!isClosed && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteLossEntry(entry.id)}
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
+                      {/* Category */}
+                      <div className="md:col-span-3 space-y-1">
+                        <Label className="text-xs">Category</Label>
+                        <Select
+                          value={entry.categoryId}
+                          onValueChange={(v) =>
+                            handleUpdateLossEntry(entry.id, "categoryId", v)
+                          }
+                          disabled={isClosed}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Subcategory */}
+                      <div className="md:col-span-3 space-y-1">
+                        <Label className="text-xs">Subcategory</Label>
+                        <Select
+                          value={entry.subcategoryId}
+                          onValueChange={(v) =>
+                            handleUpdateLossEntry(entry.id, "subcategoryId", v)
+                          }
+                          disabled={isClosed || !entry.categoryId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select subcategory" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {filteredSubcategories.map((sub) => (
+                              <SelectItem key={sub.id} value={sub.id}>
+                                {sub.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Loss Type */}
+                      <div className="md:col-span-2 space-y-1">
+                        <Label className="text-xs">Loss Type</Label>
+                        <Select
+                          value={entry.lossType}
+                          onValueChange={(v) =>
+                            handleUpdateLossEntry(entry.id, "lossType", v)
+                          }
+                          disabled={isClosed}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {allowedTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type.charAt(0).toUpperCase() + type.slice(1)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Amount */}
+                      <div className="md:col-span-1 space-y-1">
+                        <Label className="text-xs">
+                          Amount
+                        </Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          placeholder="0"
+                          value={entry.amount || ""}
+                          onChange={(e) =>
+                            handleUpdateLossEntry(
+                              entry.id,
+                              "amount",
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          disabled={isClosed}
+                        />
+                      </div>
+
+                      {/* Comments */}
+                      <div className="md:col-span-2 space-y-1">
+                        <Label className="text-xs">Comments</Label>
+                        <Input
+                          placeholder="Notes..."
+                          value={entry.comments ?? ""}
+                          onChange={(e) =>
+                            handleUpdateLossEntry(
+                              entry.id,
+                              "comments",
+                              e.target.value
+                            )
+                          }
+                          disabled={isClosed}
+                        />
+                      </div>
+
+                      {/* Delete button (desktop) */}
+                      <div className="hidden md:flex md:col-span-1 items-end justify-center pb-0.5">
+                        {!isClosed && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteLossEntry(entry.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Detail Code - only shown when subcategory has detail codes configured */}
+                    {hasDetailCodes && (
+                      <div className="md:ml-[calc(50%+0.25rem)] md:max-w-[calc(50%-0.5rem)]">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Detail Code</Label>
+                          <Select
+                            value={entry.detailCodeId || ""}
+                            onValueChange={(v) =>
+                              handleUpdateLossEntry(entry.id, "detailCodeId", v)
+                            }
+                            disabled={isClosed}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select detail (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {filteredDetailCodes.map((dc) => (
+                                <SelectItem key={dc.id} value={dc.id}>
+                                  {dc.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

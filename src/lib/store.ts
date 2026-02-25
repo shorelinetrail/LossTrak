@@ -3,6 +3,7 @@
 import {
   LossCategory,
   LossSubcategory,
+  LossDetailCode,
   DailyLog,
   LossEntry,
   AppConfig,
@@ -14,6 +15,7 @@ import {
 const STORAGE_KEYS = {
   categories: "losstrak_categories",
   subcategories: "losstrak_subcategories",
+  detailCodes: "losstrak_detail_codes",
   dailyLogs: "losstrak_daily_logs",
   lossEntries: "losstrak_loss_entries",
   config: "losstrak_config",
@@ -140,6 +142,8 @@ export function initializeStore(): void {
   }
   setStore(STORAGE_KEYS.subcategories, subcategories);
 
+  setStore(STORAGE_KEYS.detailCodes, []);
+
   const config: AppConfig[] = DEFAULT_CONFIG.map((c) => ({
     id: generateId(),
     key: c.key,
@@ -241,6 +245,52 @@ export function deleteSubcategory(id: string): void {
   setStore(
     STORAGE_KEYS.subcategories,
     subs.map((s) => (s.id === id ? { ...s, isActive: false } : s))
+  );
+}
+
+// ─── Detail Codes ───────────────────────────────────────────────
+
+export function getDetailCodes(subcategoryId?: string): LossDetailCode[] {
+  const codes = getStore<LossDetailCode>(STORAGE_KEYS.detailCodes).filter(
+    (d) => d.isActive
+  );
+  if (subcategoryId) return codes.filter((d) => d.subcategoryId === subcategoryId).sort((a, b) => a.displayOrder - b.displayOrder);
+  return codes.sort((a, b) => a.displayOrder - b.displayOrder);
+}
+
+export function getAllDetailCodes(): LossDetailCode[] {
+  return getStore<LossDetailCode>(STORAGE_KEYS.detailCodes).sort(
+    (a, b) => a.displayOrder - b.displayOrder
+  );
+}
+
+export function createDetailCode(
+  data: Omit<LossDetailCode, "id" | "createdAt">
+): LossDetailCode {
+  const codes = getStore<LossDetailCode>(STORAGE_KEYS.detailCodes);
+  const code: LossDetailCode = { ...data, id: generateId(), createdAt: now() };
+  codes.push(code);
+  setStore(STORAGE_KEYS.detailCodes, codes);
+  return code;
+}
+
+export function updateDetailCode(
+  id: string,
+  data: Partial<LossDetailCode>
+): LossDetailCode | null {
+  const codes = getStore<LossDetailCode>(STORAGE_KEYS.detailCodes);
+  const idx = codes.findIndex((d) => d.id === id);
+  if (idx === -1) return null;
+  codes[idx] = { ...codes[idx], ...data };
+  setStore(STORAGE_KEYS.detailCodes, codes);
+  return codes[idx];
+}
+
+export function deleteDetailCode(id: string): void {
+  const codes = getStore<LossDetailCode>(STORAGE_KEYS.detailCodes);
+  setStore(
+    STORAGE_KEYS.detailCodes,
+    codes.map((d) => (d.id === id ? { ...d, isActive: false } : d))
   );
 }
 

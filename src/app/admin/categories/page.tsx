@@ -4,14 +4,18 @@ import { useEffect, useState, useCallback } from "react";
 import {
   getAllCategories,
   getAllSubcategories,
+  getAllDetailCodes,
   createCategory,
   updateCategory,
   deleteCategory,
   createSubcategory,
   updateSubcategory,
   deleteSubcategory,
+  createDetailCode,
+  updateDetailCode,
+  deleteDetailCode,
 } from "@/lib/store";
-import { LossCategory, LossSubcategory, LossType } from "@/types";
+import { LossCategory, LossSubcategory, LossDetailCode, LossType } from "@/types";
 import {
   Card,
   CardContent,
@@ -39,7 +43,9 @@ import { cn } from "@/lib/utils";
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
+  const [detailCodes, setDetailCodes] = useState<LossDetailCode[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedSubcategories, setExpandedSubcategories] = useState<Set<string>>(new Set());
 
   // Add Category dialog state
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
@@ -68,11 +74,25 @@ export default function CategoriesPage() {
   const [editSubcategoryName, setEditSubcategoryName] = useState("");
   const [editSubcategoryOrder, setEditSubcategoryOrder] = useState(0);
 
+  // Add Detail Code dialog state
+  const [addDetailCodeOpen, setAddDetailCodeOpen] = useState(false);
+  const [addDetailCodeParentId, setAddDetailCodeParentId] = useState<string>("");
+  const [newDetailCodeName, setNewDetailCodeName] = useState("");
+  const [newDetailCodeOrder, setNewDetailCodeOrder] = useState(0);
+
+  // Edit Detail Code dialog state
+  const [editDetailCodeOpen, setEditDetailCodeOpen] = useState(false);
+  const [editingDetailCode, setEditingDetailCode] = useState<LossDetailCode | null>(null);
+  const [editDetailCodeName, setEditDetailCodeName] = useState("");
+  const [editDetailCodeOrder, setEditDetailCodeOrder] = useState(0);
+
   const loadData = useCallback(() => {
     const allCategories = getAllCategories();
     const allSubcategories = getAllSubcategories();
+    const allDetailCodes = getAllDetailCodes();
     setCategories(allCategories);
     setSubcategories(allSubcategories);
+    setDetailCodes(allDetailCodes);
   }, []);
 
   useEffect(() => {
@@ -93,6 +113,22 @@ export default function CategoriesPage() {
 
   const getSubcategoriesForCategory = (categoryId: string) => {
     return subcategories.filter((sc) => sc.categoryId === categoryId);
+  };
+
+  const getDetailCodesForSubcategory = (subcategoryId: string) => {
+    return detailCodes.filter((dc) => dc.subcategoryId === subcategoryId);
+  };
+
+  const toggleSubcategoryExpanded = (subcategoryId: string) => {
+    setExpandedSubcategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(subcategoryId)) {
+        next.delete(subcategoryId);
+      } else {
+        next.add(subcategoryId);
+      }
+      return next;
+    });
   };
 
   // --- Category Actions ---
@@ -251,8 +287,84 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteSubcategory = (subcategory: LossSubcategory) => {
+    const subDetailCodes = getDetailCodesForSubcategory(subcategory.id);
+    if (subDetailCodes.length > 0) {
+      toast.error(
+        "Cannot delete a subcategory that has detail codes. Remove all detail codes first."
+      );
+      return;
+    }
     deleteSubcategory(subcategory.id);
     toast.success(`Subcategory "${subcategory.name}" deleted.`);
+    loadData();
+  };
+
+  // --- Detail Code Actions ---
+
+  const handleOpenAddDetailCode = (subcategoryId: string) => {
+    setAddDetailCodeParentId(subcategoryId);
+    setNewDetailCodeName("");
+    setNewDetailCodeOrder(0);
+    setAddDetailCodeOpen(true);
+  };
+
+  const handleAddDetailCode = () => {
+    if (!newDetailCodeName.trim()) {
+      toast.error("Detail code name is required.");
+      return;
+    }
+
+    createDetailCode({
+      subcategoryId: addDetailCodeParentId,
+      name: newDetailCodeName.trim(),
+      displayOrder: newDetailCodeOrder,
+      isActive: true,
+    });
+
+    toast.success(`Detail code "${newDetailCodeName.trim()}" created.`);
+    setNewDetailCodeName("");
+    setNewDetailCodeOrder(0);
+    setAddDetailCodeOpen(false);
+    loadData();
+  };
+
+  const handleEditDetailCodeOpen = (detailCode: LossDetailCode) => {
+    setEditingDetailCode(detailCode);
+    setEditDetailCodeName(detailCode.name);
+    setEditDetailCodeOrder(detailCode.displayOrder);
+    setEditDetailCodeOpen(true);
+  };
+
+  const handleEditDetailCodeSave = () => {
+    if (!editingDetailCode) return;
+
+    if (!editDetailCodeName.trim()) {
+      toast.error("Detail code name is required.");
+      return;
+    }
+
+    updateDetailCode(editingDetailCode.id, {
+      name: editDetailCodeName.trim(),
+      displayOrder: editDetailCodeOrder,
+    });
+
+    toast.success(`Detail code "${editDetailCodeName.trim()}" updated.`);
+    setEditDetailCodeOpen(false);
+    setEditingDetailCode(null);
+    loadData();
+  };
+
+  const handleToggleDetailCodeActive = (detailCode: LossDetailCode) => {
+    updateDetailCode(detailCode.id, { isActive: !detailCode.isActive });
+    toast.success(
+      `Detail code "${detailCode.name}" ${detailCode.isActive ? "deactivated" : "activated"}.`
+    );
+    loadData();
+  };
+
+  const handleDeleteDetailCode = (detailCode: LossDetailCode) => {
+    deleteDetailCode(detailCode.id);
+    toast.success(`Detail code "${detailCode.name}" deleted.`);
     loadData();
   };
 
@@ -440,63 +552,155 @@ export default function CategoriesPage() {
                           No subcategories defined.
                         </p>
                       )}
-                      {catSubcategories.map((subcategory) => (
-                        <div
-                          key={subcategory.id}
-                          className={cn(
-                            "flex items-center justify-between rounded-md border px-3 py-1.5",
-                            !subcategory.isActive && "opacity-50"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {subcategory.name}
-                            </span>
-                            {!subcategory.isActive && (
-                              <Badge variant="secondary" className="text-xs">
-                                Inactive
-                              </Badge>
+                      {catSubcategories.map((subcategory) => {
+                        const subDetailCodes = getDetailCodesForSubcategory(subcategory.id).sort(
+                          (a, b) => a.displayOrder - b.displayOrder
+                        );
+                        const isSubExpanded = expandedSubcategories.has(subcategory.id);
+
+                        return (
+                          <div key={subcategory.id} className="space-y-1">
+                            <div
+                              className={cn(
+                                "flex items-center justify-between rounded-md border px-3 py-1.5",
+                                !subcategory.isActive && "opacity-50"
+                              )}
+                            >
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => toggleSubcategoryExpanded(subcategory.id)}
+                                  className="p-0.5 hover:bg-muted rounded"
+                                >
+                                  {isSubExpanded ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                </button>
+                                <span className="text-sm font-medium">
+                                  {subcategory.name}
+                                </span>
+                                {!subcategory.isActive && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    Inactive
+                                  </Badge>
+                                )}
+                                {subDetailCodes.length > 0 && (
+                                  <span className="text-xs text-muted-foreground">
+                                    {subDetailCodes.length} detail{subDetailCodes.length === 1 ? "" : "s"}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 mr-2">
+                                  <Label
+                                    htmlFor={`sub-active-${subcategory.id}`}
+                                    className="text-xs text-muted-foreground"
+                                  >
+                                    Active
+                                  </Label>
+                                  <Switch
+                                    id={`sub-active-${subcategory.id}`}
+                                    checked={subcategory.isActive}
+                                    onCheckedChange={() =>
+                                      handleToggleSubcategoryActive(subcategory)
+                                    }
+                                  />
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() =>
+                                    handleEditSubcategoryOpen(subcategory)
+                                  }
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() =>
+                                    handleDeleteSubcategory(subcategory)
+                                  }
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                            {isSubExpanded && (
+                              <div className="ml-6 space-y-1">
+                                {subDetailCodes.length === 0 && (
+                                  <p className="text-xs text-muted-foreground py-1 pl-2">
+                                    No detail codes defined.
+                                  </p>
+                                )}
+                                {subDetailCodes.map((dc) => (
+                                  <div
+                                    key={dc.id}
+                                    className={cn(
+                                      "flex items-center justify-between rounded-md border px-2.5 py-1",
+                                      !dc.isActive && "opacity-50"
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium">{dc.name}</span>
+                                      {!dc.isActive && (
+                                        <Badge variant="secondary" className="text-[10px] px-1">
+                                          Inactive
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 mr-1">
+                                        <Label
+                                          htmlFor={`dc-active-${dc.id}`}
+                                          className="text-[10px] text-muted-foreground"
+                                        >
+                                          Active
+                                        </Label>
+                                        <Switch
+                                          id={`dc-active-${dc.id}`}
+                                          checked={dc.isActive}
+                                          onCheckedChange={() =>
+                                            handleToggleDetailCodeActive(dc)
+                                          }
+                                        />
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => handleEditDetailCodeOpen(dc)}
+                                      >
+                                        <Pencil className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => handleDeleteDetailCode(dc)}
+                                      >
+                                        <Trash2 className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs"
+                                  onClick={() => handleOpenAddDetailCode(subcategory.id)}
+                                >
+                                  <Plus className="mr-1 h-3 w-3" />
+                                  Add Detail Code
+                                </Button>
+                              </div>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-2 mr-2">
-                              <Label
-                                htmlFor={`sub-active-${subcategory.id}`}
-                                className="text-xs text-muted-foreground"
-                              >
-                                Active
-                              </Label>
-                              <Switch
-                                id={`sub-active-${subcategory.id}`}
-                                checked={subcategory.isActive}
-                                onCheckedChange={() =>
-                                  handleToggleSubcategoryActive(subcategory)
-                                }
-                              />
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                handleEditSubcategoryOpen(subcategory)
-                              }
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() =>
-                                handleDeleteSubcategory(subcategory)
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="mt-3">
                       <Button
@@ -655,6 +859,87 @@ export default function CategoriesPage() {
               Cancel
             </Button>
             <Button onClick={handleEditSubcategorySave}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Detail Code Dialog */}
+      <Dialog open={addDetailCodeOpen} onOpenChange={setAddDetailCodeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Detail Code</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-dc-name">Name</Label>
+              <Input
+                id="new-dc-name"
+                placeholder="e.g. Heat exchanger fouling"
+                value={newDetailCodeName}
+                onChange={(e) => setNewDetailCodeName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-dc-order">Display Order</Label>
+              <Input
+                id="new-dc-order"
+                type="number"
+                min={0}
+                value={newDetailCodeOrder}
+                onChange={(e) =>
+                  setNewDetailCodeOrder(parseInt(e.target.value) || 0)
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAddDetailCodeOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddDetailCode}>Create Detail Code</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Detail Code Dialog */}
+      <Dialog open={editDetailCodeOpen} onOpenChange={setEditDetailCodeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Detail Code</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-dc-name">Name</Label>
+              <Input
+                id="edit-dc-name"
+                value={editDetailCodeName}
+                onChange={(e) => setEditDetailCodeName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-dc-order">Display Order</Label>
+              <Input
+                id="edit-dc-order"
+                type="number"
+                min={0}
+                value={editDetailCodeOrder}
+                onChange={(e) =>
+                  setEditDetailCodeOrder(parseInt(e.target.value) || 0)
+                }
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditDetailCodeOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleEditDetailCodeSave}>Save Changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

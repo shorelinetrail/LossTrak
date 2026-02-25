@@ -261,6 +261,7 @@ export default function BulkUploadPage() {
             date,
             categoryId: cat.id,
             subcategoryId: sub.id,
+            detailCodeId: "",
             lossType: row.lossType as "shutdown" | "slowdown",
             amount: row.amount,
             comments: row.comments,

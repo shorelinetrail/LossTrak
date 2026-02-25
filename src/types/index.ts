@@ -21,6 +21,15 @@ export interface LossSubcategory {
   createdAt: string;
 }
 
+export interface LossDetailCode {
+  id: string;
+  subcategoryId: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface DailyLog {
   id: string;
   date: string; // YYYY-MM-DD
@@ -39,6 +48,7 @@ export interface LossEntry {
   date: string; // denormalized for easy filtering
   categoryId: string;
   subcategoryId: string;
+  detailCodeId: string; // optional third level below subcategory
   lossType: LossType;
   amount: number;
   comments: string;
@@ -56,6 +66,7 @@ export interface AppConfig {
 export interface LossEntryWithDetails extends LossEntry {
   categoryName: string;
   subcategoryName: string;
+  detailCodeName: string;
 }
 
 export interface DailyLogWithEntries extends DailyLog {

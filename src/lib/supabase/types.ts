@@ -38,6 +38,23 @@ export interface Database {
           Database["public"]["Tables"]["loss_subcategories"]["Insert"]
         >;
       };
+      loss_detail_codes: {
+        Row: {
+          id: string;
+          subcategory_id: string;
+          name: string;
+          display_order: number;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database["public"]["Tables"]["loss_detail_codes"]["Row"],
+          "id" | "created_at"
+        > & { id?: string; created_at?: string };
+        Update: Partial<
+          Database["public"]["Tables"]["loss_detail_codes"]["Insert"]
+        >;
+      };
       daily_logs: {
         Row: {
           id: string;
@@ -64,6 +81,7 @@ export interface Database {
           daily_log_id: string;
           category_id: string;
           subcategory_id: string;
+          detail_code_id: string | null;
           loss_type: string;
           amount: number;
           comments: string;
