@@ -55,6 +55,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Lock,
+  Unlock,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { toast } from "sonner";
@@ -124,8 +125,8 @@ export default function DailyPage() {
           setDayComments("");
           setLossEntries([]);
         }
-        // Load recent history (7 days before selected date)
-        const history = getRecentHistory(dateKey, 7);
+        // Load recent history (30 days before selected date, panel slices locally)
+        const history = getRecentHistory(dateKey, 30);
         setRecentHistory(history);
       } catch {
         toast.error("Failed to load daily data.");
@@ -138,12 +139,14 @@ export default function DailyPage() {
 
   // Computed values
   const production = dailyLog?.production ?? 0;
-  const delta = bar - production;
+  const delta = bar - production; // positive = loss day, negative = gain day
+  const isGainDay = delta < 0;
+  const absDelta = Math.abs(delta);
   const totalAccounted = useMemo(
     () => lossEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0),
     [lossEntries]
   );
-  const remaining = Math.round((delta - totalAccounted) * 100) / 100;
+  const remaining = Math.round((absDelta - totalAccounted) * 100) / 100;
   const isBalanced = Math.abs(remaining) < 0.01;
 
   // Start accounting for a new day
@@ -277,6 +280,21 @@ export default function DailyPage() {
     }
   }, [dailyLog, isBalanced, dateKey, dayComments]);
 
+  // Reopen a closed day for editing
+  const handleReopenDay = useCallback(async () => {
+    if (!dailyLog || dailyLog.status !== "closed") return;
+    try {
+      setSaving(true);
+      const updated = await updateDailyLog(dateKey, { status: "open" });
+      setDailyLog(updated);
+      toast.success("Day reopened for editing.");
+    } catch {
+      toast.error("Failed to reopen day.");
+    } finally {
+      setSaving(false);
+    }
+  }, [dailyLog, dateKey]);
+
   // Carry forward entries from a previous day (copies structure, zeroes amounts)
   const handleCarryForward = useCallback(
     async (previousEntries: LossEntry[]) => {
@@ -349,7 +367,7 @@ export default function DailyPage() {
             Daily Loss Accounting
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Record production and account for losses
+            Record production and account for losses or gains
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -464,10 +482,16 @@ export default function DailyPage() {
             <Card>
               <CardContent className="pt-4 pb-3 px-4">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Delta
+                  {isGainDay ? "Gain" : "Delta"}
                 </p>
-                <p className="text-2xl font-bold mt-1 text-orange-600">
-                  {delta.toLocaleString()}
+                <p
+                  className={cn(
+                    "text-2xl font-bold mt-1",
+                    isGainDay ? "text-green-600" : "text-orange-600"
+                  )}
+                >
+                  {isGainDay ? "+" : ""}
+                  {absDelta.toLocaleString()}
                 </p>
                 <p className="text-xs text-muted-foreground">{productionUnit}</p>
               </CardContent>
@@ -522,6 +546,7 @@ export default function DailyPage() {
             categories={categories}
             subcategories={subcategories}
             productionUnit={productionUnit}
+            todayDelta={delta}
             onCarryForward={handleCarryForward}
             disabled={isClosed || !dailyLog}
           />
@@ -552,12 +577,12 @@ export default function DailyPage() {
             </Card>
           )}
 
-          {/* Loss Entries */}
+          {/* Loss / Gain Entries */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">
-                  Loss Entries ({lossEntries.length})
+                  {isGainDay ? "Gain" : "Loss"} Entries ({lossEntries.length})
                 </CardTitle>
                 {!isClosed && (
                   <Button
@@ -566,7 +591,7 @@ export default function DailyPage() {
                     onClick={handleAddLossEntry}
                   >
                     <Plus className="h-4 w-4 mr-1" />
-                    Add Loss
+                    Add {isGainDay ? "Gain" : "Loss"}
                   </Button>
                 )}
               </div>
@@ -574,11 +599,11 @@ export default function DailyPage() {
             <CardContent className="space-y-4">
               {lossEntries.length === 0 && (
                 <div className="text-center py-8 text-muted-foreground">
-                  <p>No loss entries yet.</p>
+                  <p>No {isGainDay ? "gain" : "loss"} entries yet.</p>
                   {!isClosed && (
                     <p className="text-sm mt-1">
-                      Click &quot;Add Loss&quot; to start accounting for the
-                      delta.
+                      Click &quot;Add {isGainDay ? "Gain" : "Loss"}&quot; to start accounting for the
+                      {isGainDay ? " gain" : " delta"}.
                     </p>
                   )}
                 </div>
@@ -779,13 +804,13 @@ export default function DailyPage() {
                   <div className="text-center sm:text-left">
                     <p className="font-medium">
                       {isBalanced
-                        ? "All losses are accounted for. Ready to close."
+                        ? `All ${isGainDay ? "gains" : "losses"} are accounted for. Ready to close.`
                         : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining to account for.`}
                     </p>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {isBalanced
                         ? "Closing the day will lock all entries from further edits."
-                        : "All losses must be accounted for before closing the day."}
+                        : `All ${isGainDay ? "gains" : "losses"} must be accounted for before closing the day.`}
                     </p>
                   </div>
                   <Button
@@ -810,11 +835,22 @@ export default function DailyPage() {
           {isClosed && (
             <Card className="border-muted bg-muted/30">
               <CardContent className="pt-6 pb-6">
-                <div className="flex items-center justify-center gap-3 text-muted-foreground">
-                  <Lock className="h-5 w-5" />
-                  <p className="font-medium">
-                    This day has been closed and is read-only.
-                  </p>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <Lock className="h-5 w-5" />
+                    <p className="font-medium">
+                      This day has been closed and is read-only.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleReopenDay}
+                    disabled={saving}
+                  >
+                    <Unlock className="h-4 w-4 mr-1" />
+                    Reopen Day
+                  </Button>
                 </div>
               </CardContent>
             </Card>

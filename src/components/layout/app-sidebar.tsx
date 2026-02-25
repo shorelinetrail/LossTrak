@@ -11,6 +11,7 @@ import {
   CalendarClock,
   Settings,
   Tags,
+  Upload,
   ChevronDown,
   ChevronRight,
   Activity,
@@ -47,6 +48,7 @@ const navigation: (NavItem | NavGroup)[] = [
     icon: Settings,
     items: [
       { label: "Categories", href: "/admin/categories", icon: Tags },
+      { label: "Bulk Upload", href: "/admin/bulk-upload", icon: Upload },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
   },
