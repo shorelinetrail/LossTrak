@@ -394,7 +394,7 @@ export default function DailyPage() {
       {/* No daily log yet - show initial form */}
       {!dailyLog && (
         <Card>
-          <CardContent className="pt-4 pb-3 space-y-3">
+          <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
               No data for{" "}
               <span className="font-medium text-foreground">
@@ -443,7 +443,7 @@ export default function DailyPage() {
           <div className="sticky top-0 z-10 bg-background pt-1 pb-1 -mt-1 -mx-4 px-4 border-b border-transparent [&:not(:first-child)]:border-border/50">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <Card>
-              <CardContent className="pt-2.5 pb-2 px-3">
+              <CardContent className="px-3">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Production
                 </p>
@@ -454,7 +454,7 @@ export default function DailyPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-2.5 pb-2 px-3">
+              <CardContent className="px-3">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   BAR
                 </p>
@@ -465,7 +465,7 @@ export default function DailyPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-2.5 pb-2 px-3">
+              <CardContent className="px-3">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   {isGainDay ? "Gain" : "Delta"}
                 </p>
@@ -482,7 +482,7 @@ export default function DailyPage() {
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-2.5 pb-2 px-3">
+              <CardContent className="px-3">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Accounted
                 </p>
@@ -500,7 +500,7 @@ export default function DailyPage() {
                   : "border-red-500 bg-red-50 dark:bg-red-950/20"
               )}
             >
-              <CardContent className="pt-2.5 pb-2 px-3">
+              <CardContent className="px-3">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Remaining
                 </p>
@@ -539,7 +539,7 @@ export default function DailyPage() {
           {/* Production Edit (when not closed) */}
           {!isClosed && (
             <Card>
-              <CardContent className="pt-3 pb-3">
+              <CardContent>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 max-w-xs space-y-1">
                     <Label htmlFor="production-edit" className="text-xs">
@@ -561,8 +561,8 @@ export default function DailyPage() {
 
           {/* Loss / Gain Entries */}
           <Card>
-            <CardContent className="pt-3 pb-3">
-              <div className="flex items-center justify-between mb-3">
+            <CardContent>
+              <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">
                   {isGainDay ? "Gain" : "Loss"} Entries ({lossEntries.length})
                 </span>
@@ -766,7 +766,7 @@ export default function DailyPage() {
 
           {/* Day Comments */}
           <Card>
-            <CardContent className="pt-3 pb-3">
+            <CardContent>
               <Label className="text-xs text-muted-foreground">Day Comments</Label>
               <Textarea
                 placeholder="Overall notes for this day..."
@@ -782,8 +782,8 @@ export default function DailyPage() {
           {/* Close Day Action */}
           {!isClosed && (
             <Card>
-              <CardContent className="pt-3 pb-3">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              <CardContent>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
                   <div className="text-center sm:text-left">
                     <p className="text-sm font-medium">
                       {isBalanced
@@ -817,8 +817,8 @@ export default function DailyPage() {
           {/* Closed Day Banner */}
           {isClosed && (
             <Card className="border-muted bg-muted/30">
-              <CardContent className="pt-3 pb-3">
-                <div className="flex items-center justify-between gap-3">
+              <CardContent>
+                <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Lock className="h-4 w-4" />
                     <p className="text-sm font-medium">

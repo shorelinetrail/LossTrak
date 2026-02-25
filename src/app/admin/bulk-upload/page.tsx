@@ -353,7 +353,7 @@ export default function BulkUploadPage() {
 
       {/* Combined Format + Input */}
       <Card>
-        <CardContent className="pt-4 pb-3 space-y-3">
+        <CardContent className="space-y-2">
           <details className="group">
             <summary className="text-xs font-medium cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
               CSV format reference
@@ -417,7 +417,7 @@ export default function BulkUploadPage() {
       {/* Validation */}
       {parsed.length > 0 && (
         <Card>
-          <CardContent className="pt-3 pb-3 space-y-3">
+          <CardContent className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Validation</span>
               <div className="flex items-center gap-1.5">
@@ -532,7 +532,7 @@ export default function BulkUploadPage() {
       {/* Results */}
       {results && (
         <Card>
-          <CardContent className="pt-3 pb-3 space-y-3">
+          <CardContent className="space-y-2">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <span className="text-sm font-medium">Import Complete</span>

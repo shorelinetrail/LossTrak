@@ -28,7 +28,7 @@ export function TopBar() {
   const mounted = useMounted();
 
   return (
-    <header className="flex h-14 items-center justify-between border-b border-border bg-background px-6">
+    <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <div />
       <div className="flex items-center gap-2">
         {mounted && (

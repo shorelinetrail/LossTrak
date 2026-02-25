@@ -53,14 +53,14 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Production Configuration</CardTitle>
+          <CardTitle className="text-sm">Production Configuration</CardTitle>
           <CardDescription>
             Set the Best Achievable Rate and production unit for loss tracking
             calculations.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
+        <CardContent className="space-y-3">
+          <div className="space-y-1">
             <Label htmlFor="bar-rate">Best Achievable Rate (BAR)</Label>
             <Input
               id="bar-rate"
@@ -77,7 +77,7 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             <Label htmlFor="production-unit">Production Unit</Label>
             <Input
               id="production-unit"
@@ -92,7 +92,7 @@ export default function SettingsPage() {
             </p>
           </div>
 
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-end pt-1">
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving ? "Saving..." : "Save Settings"}
             </Button>

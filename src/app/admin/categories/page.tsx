@@ -432,7 +432,7 @@ export default function CategoriesPage() {
                 </CardHeader>
 
                 {isExpanded && (
-                  <CardContent className="pt-0 pb-3">
+                  <CardContent className="pt-0">
                     <Separator className="mb-2" />
                     <div className="space-y-1.5">
                       {catSubcategories.length === 0 && (

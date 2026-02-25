@@ -412,11 +412,11 @@ export function LossContextPanel({
 
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-muted-foreground" />
-            <CardTitle className="text-base">Loss Context</CardTitle>
+            <CardTitle className="text-sm">Loss Context</CardTitle>
             <Badge variant="outline" className="text-xs font-normal">
               {rangedHistory.length}d
             </Badge>
@@ -454,7 +454,7 @@ export function LossContextPanel({
       </CardHeader>
 
       {expanded && (
-        <CardContent className="pt-0 space-y-3">
+        <CardContent className="pt-0 space-y-2">
           {/* ── Insights Bar ─────────────────────────────── */}
           {insights.length > 0 && (
             <div>

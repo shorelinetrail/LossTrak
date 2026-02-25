@@ -121,7 +121,7 @@ export default function ReviewPage() {
       {/* Summary Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
-          <CardHeader className="pb-1 pt-3">
+          <CardHeader className="pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Total Days Logged
             </CardTitle>
@@ -132,7 +132,7 @@ export default function ReviewPage() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-1 pt-3">
+          <CardHeader className="pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Days Closed
             </CardTitle>
@@ -145,7 +145,7 @@ export default function ReviewPage() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-1 pt-3">
+          <CardHeader className="pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Days Open
             </CardTitle>
@@ -158,7 +158,7 @@ export default function ReviewPage() {
         </Card>
 
         <Card>
-          <CardHeader className="pb-1 pt-3">
+          <CardHeader className="pb-0">
             <CardTitle className="text-xs font-medium text-muted-foreground">
               Average Production
             </CardTitle>
@@ -176,7 +176,7 @@ export default function ReviewPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-3 pb-3">
+        <CardContent>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <div className="flex items-center gap-1.5">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" />
@@ -252,11 +252,11 @@ export default function ReviewPage() {
 
       {/* Table */}
       <Card>
-        <CardContent className="pt-3 pb-3">
+        <CardContent>
           {filteredLogs.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">No daily logs found</p>
+            <div className="text-center py-6 text-muted-foreground">
+              <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm font-medium">No daily logs found</p>
               <p className="text-sm mt-1">
                 {logs.length === 0
                   ? "Start by adding a daily log from the Daily Entry page."

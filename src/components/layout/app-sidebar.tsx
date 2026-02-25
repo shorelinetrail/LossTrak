@@ -71,11 +71,11 @@ export function AppSidebar() {
 
   return (
     <aside className="flex h-full w-56 flex-col border-r border-border bg-sidebar">
-      <div className="flex items-center gap-2.5 border-b border-border px-4 py-4">
-        <Activity className="h-6 w-6 text-primary" />
-        <span className="text-lg font-bold tracking-tight">LossTrak</span>
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-border px-4">
+        <Activity className="h-4 w-4 text-primary" />
+        <span className="text-sm font-bold tracking-tight">LossTrak</span>
       </div>
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
+      <nav className="flex-1 overflow-y-auto px-2 py-2">
         <ul className="space-y-0.5">
           {navigation.map((item) => {
             if (isNavGroup(item)) {
