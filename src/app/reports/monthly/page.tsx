@@ -291,17 +291,16 @@ export default function MonthlyReportPage() {
   }, [categories, subcategories, allLossEntries, totalLosses]);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-3 p-4">
       {/* Header & Selectors */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Monthly Report</h1>
-          <p className="text-muted-foreground">
-            Production and loss analysis for {MONTHS[selectedMonth]}{" "}
-            {selectedYear}
+          <h1 className="text-lg font-semibold tracking-tight">Monthly Report</h1>
+          <p className="text-sm text-muted-foreground">
+            {MONTHS[selectedMonth]} {selectedYear}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Select
             value={String(selectedMonth)}
             onValueChange={(val) => setSelectedMonth(Number(val))}
@@ -336,7 +335,7 @@ export default function MonthlyReportPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -345,7 +344,7 @@ export default function MonthlyReportPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalProduction.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -360,7 +359,7 @@ export default function MonthlyReportPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalBAR.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -375,7 +374,7 @@ export default function MonthlyReportPage() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalLosses.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -398,7 +397,7 @@ export default function MonthlyReportPage() {
           <CardContent>
             <div
               className={cn(
-                "text-2xl font-bold",
+                "text-xl font-bold",
                 utilization >= 80 ? "text-green-600" : "text-red-600"
               )}
             >
@@ -412,10 +411,10 @@ export default function MonthlyReportPage() {
       {/* Stacked Bar Chart - Daily Losses by Category */}
       <Card>
         <CardHeader>
-          <CardTitle>Daily Losses by Category</CardTitle>
+          <CardTitle className="text-sm">Daily Losses by Category</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={stackedBarData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" fontSize={12} />
@@ -438,10 +437,10 @@ export default function MonthlyReportPage() {
       {/* Line Chart - Daily Production vs BAR */}
       <Card>
         <CardHeader>
-          <CardTitle>Daily Production vs BAR</CardTitle>
+          <CardTitle className="text-sm">Daily Production vs BAR</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={300}>
             <LineChart data={productionLineData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="day" fontSize={12} />
@@ -471,7 +470,7 @@ export default function MonthlyReportPage() {
       {/* Losses per Category Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Losses per Category</CardTitle>
+          <CardTitle className="text-sm">Losses per Category</CardTitle>
         </CardHeader>
         <CardContent>
           {categorySummary.length === 0 ? (
@@ -565,7 +564,7 @@ export default function MonthlyReportPage() {
       {/* Losses per Subcategory Grouped by Category */}
       <Card>
         <CardHeader>
-          <CardTitle>Losses per Subcategory</CardTitle>
+          <CardTitle className="text-sm">Losses per Subcategory</CardTitle>
         </CardHeader>
         <CardContent>
           {subcategorySummary.length === 0 ? (
@@ -573,17 +572,17 @@ export default function MonthlyReportPage() {
               No subcategory loss data for this month.
             </p>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {subcategorySummary.map((group) => (
                 <div key={group.categoryId}>
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
                     <div
-                      className="h-3 w-3 rounded-full"
+                      className="h-2.5 w-2.5 rounded-full"
                       style={{
                         backgroundColor: group.categoryColor || "#6b7280",
                       }}
                     />
-                    <h4 className="font-semibold text-lg">
+                    <h4 className="font-semibold text-sm">
                       {group.categoryName}
                     </h4>
                   </div>

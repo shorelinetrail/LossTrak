@@ -255,16 +255,14 @@ export default function YearlyReportPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-3 p-4">
       {/* Header & Selector */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Yearly Report</h1>
-          <p className="text-muted-foreground">
-            Production and loss analysis for {selectedYear}
-          </p>
+          <h1 className="text-lg font-semibold tracking-tight">Yearly Report</h1>
+          <p className="text-sm text-muted-foreground">{selectedYear}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Select
             value={String(selectedYear)}
             onValueChange={(val) => setSelectedYear(Number(val))}
@@ -284,7 +282,7 @@ export default function YearlyReportPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -293,7 +291,7 @@ export default function YearlyReportPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalProduction.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -308,7 +306,7 @@ export default function YearlyReportPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalBAR.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -323,7 +321,7 @@ export default function YearlyReportPage() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalLosses.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -346,7 +344,7 @@ export default function YearlyReportPage() {
           <CardContent>
             <div
               className={cn(
-                "text-2xl font-bold",
+                "text-xl font-bold",
                 utilization >= 80 ? "text-green-600" : "text-red-600"
               )}
             >
@@ -360,10 +358,10 @@ export default function YearlyReportPage() {
       {/* Monthly Production vs BAR Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Monthly Production vs BAR</CardTitle>
+          <CardTitle className="text-sm">Monthly Production vs BAR</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={monthlyProductionData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" fontSize={12} />
@@ -380,10 +378,10 @@ export default function YearlyReportPage() {
       {/* Stacked Area Chart - Monthly Losses by Category */}
       <Card>
         <CardHeader>
-          <CardTitle>Monthly Losses by Category</CardTitle>
+          <CardTitle className="text-sm">Monthly Losses by Category</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={stackedAreaData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" fontSize={12} />
@@ -409,7 +407,7 @@ export default function YearlyReportPage() {
       {/* Category Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Losses per Category</CardTitle>
+          <CardTitle className="text-sm">Losses per Category</CardTitle>
         </CardHeader>
         <CardContent>
           {categorySummary.length === 0 ? (
@@ -503,7 +501,7 @@ export default function YearlyReportPage() {
       {/* Pie Chart - Category Distribution */}
       <Card>
         <CardHeader>
-          <CardTitle>Category Distribution</CardTitle>
+          <CardTitle className="text-sm">Category Distribution</CardTitle>
         </CardHeader>
         <CardContent>
           {pieData.length === 0 ? (
@@ -511,7 +509,7 @@ export default function YearlyReportPage() {
               No loss data for this year.
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={pieData}

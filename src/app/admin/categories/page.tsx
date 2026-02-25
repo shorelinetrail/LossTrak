@@ -257,13 +257,12 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-4xl py-8 px-4">
-      <div className="flex items-center justify-between mb-8">
+    <div className="container mx-auto max-w-4xl py-4 px-4">
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Loss Categories</h1>
-          <p className="text-muted-foreground">
-            Manage loss categories and subcategories used to classify production
-            losses.
+          <h1 className="text-lg font-semibold">Loss Categories</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Manage categories and subcategories for classifying production losses.
           </p>
         </div>
         <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
@@ -347,7 +346,7 @@ export default function CategoriesPage() {
         </Card>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {categories
           .sort((a, b) => a.displayOrder - b.displayOrder)
           .map((category) => {
@@ -361,27 +360,27 @@ export default function CategoriesPage() {
                 key={category.id}
                 className={cn(!category.isActive && "opacity-60")}
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="py-2.5 px-4">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => toggleExpanded(category.id)}
-                        className="p-1 hover:bg-muted rounded"
+                        className="p-0.5 hover:bg-muted rounded"
                       >
                         {isExpanded ? (
-                          <ChevronDown className="h-5 w-5" />
+                          <ChevronDown className="h-4 w-4" />
                         ) : (
-                          <ChevronRight className="h-5 w-5" />
+                          <ChevronRight className="h-4 w-4" />
                         )}
                       </button>
                       <div>
-                        <CardTitle className="text-lg flex items-center gap-2">
+                        <CardTitle className="text-sm flex items-center gap-2">
                           {category.name}
                           {!category.isActive && (
                             <Badge variant="secondary">Inactive</Badge>
                           )}
                         </CardTitle>
-                        <div className="flex gap-1.5 mt-1.5">
+                        <div className="flex gap-1 mt-1">
                           {category.allowedLossTypes.map((type) => (
                             <Badge
                               key={type}
@@ -433,9 +432,9 @@ export default function CategoriesPage() {
                 </CardHeader>
 
                 {isExpanded && (
-                  <CardContent className="pt-0">
-                    <Separator className="mb-4" />
-                    <div className="space-y-2">
+                  <CardContent className="pt-0 pb-3">
+                    <Separator className="mb-2" />
+                    <div className="space-y-1.5">
                       {catSubcategories.length === 0 && (
                         <p className="text-sm text-muted-foreground py-2 pl-4">
                           No subcategories defined.
@@ -445,7 +444,7 @@ export default function CategoriesPage() {
                         <div
                           key={subcategory.id}
                           className={cn(
-                            "flex items-center justify-between rounded-md border px-4 py-2.5",
+                            "flex items-center justify-between rounded-md border px-3 py-1.5",
                             !subcategory.isActive && "opacity-50"
                           )}
                         >

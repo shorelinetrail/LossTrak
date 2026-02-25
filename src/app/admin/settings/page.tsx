@@ -45,9 +45,9 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="container mx-auto max-w-2xl py-8 px-4">
-      <h1 className="text-3xl font-bold mb-2">Settings</h1>
-      <p className="text-muted-foreground mb-8">
+    <div className="container mx-auto max-w-2xl py-4 px-4">
+      <h1 className="text-lg font-semibold">Settings</h1>
+      <p className="text-sm text-muted-foreground mt-0.5 mb-4">
         Configure application-wide production parameters.
       </p>
 
@@ -59,7 +59,7 @@ export default function SettingsPage() {
             calculations.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="bar-rate">Best Achievable Rate (BAR)</Label>
             <Input

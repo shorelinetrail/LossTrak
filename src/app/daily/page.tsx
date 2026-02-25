@@ -24,12 +24,7 @@ import {
   LossType,
 } from "@/types";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,7 +42,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
 import {
   CalendarIcon,
   Plus,
@@ -359,17 +353,12 @@ export default function DailyPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-5xl py-6 px-4 space-y-6">
+    <div className="container mx-auto max-w-5xl py-4 px-4 space-y-3">
       {/* Header with Date Picker */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Daily Loss Accounting
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Record production and account for losses or gains
-          </p>
-        </div>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold tracking-tight">
+          Daily Loss Accounting
+        </h1>
         <div className="flex items-center gap-2">
           {isClosed && (
             <Badge variant="secondary" className="gap-1">
@@ -402,26 +391,21 @@ export default function DailyPage() {
         </div>
       </div>
 
-      <Separator />
-
       {/* No daily log yet - show initial form */}
       {!dailyLog && (
         <Card>
-          <CardHeader>
-            <CardTitle>Start Daily Accounting</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="pt-4 pb-3 space-y-3">
             <p className="text-sm text-muted-foreground">
-              No production data recorded for{" "}
+              No data for{" "}
               <span className="font-medium text-foreground">
-                {format(selectedDate, "MMMM d, yyyy")}
+                {format(selectedDate, "MMM d, yyyy")}
               </span>
-              . Enter the daily production total to begin accounting for losses.
+              . Enter production to begin.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 items-end">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="production-init">
-                  Daily Production Total ({productionUnit})
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex-1 space-y-1">
+                <Label htmlFor="production-init" className="text-xs">
+                  Production ({productionUnit})
                 </Label>
                 <Input
                   id="production-init"
@@ -433,11 +417,12 @@ export default function DailyPage() {
                   onChange={(e) => setProductionInput(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-muted-foreground">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
                   BAR: {bar.toLocaleString()} {productionUnit}
                 </Label>
                 <Button
+                  size="sm"
                   onClick={handleStartAccounting}
                   disabled={
                     saving || !productionInput || isNaN(parseFloat(productionInput))
@@ -455,56 +440,56 @@ export default function DailyPage() {
       {dailyLog && (
         <>
           {/* KPI Summary Cards - sticky so always visible */}
-          <div className="sticky top-0 z-10 bg-background pt-2 pb-2 -mt-2 -mx-4 px-4 border-b border-transparent [&:not(:first-child)]:border-border/50">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="sticky top-0 z-10 bg-background pt-1 pb-1 -mt-1 -mx-4 px-4 border-b border-transparent [&:not(:first-child)]:border-border/50">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <CardContent className="pt-2.5 pb-2 px-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Production
                 </p>
-                <p className="text-2xl font-bold mt-1">
+                <p className="text-xl font-bold mt-0.5">
                   {production.toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <CardContent className="pt-2.5 pb-2 px-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   BAR
                 </p>
-                <p className="text-2xl font-bold mt-1">
+                <p className="text-xl font-bold mt-0.5">
                   {bar.toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <CardContent className="pt-2.5 pb-2 px-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   {isGainDay ? "Gain" : "Delta"}
                 </p>
                 <p
                   className={cn(
-                    "text-2xl font-bold mt-1",
+                    "text-xl font-bold mt-0.5",
                     isGainDay ? "text-green-600" : "text-orange-600"
                   )}
                 >
                   {isGainDay ? "+" : ""}
                   {absDelta.toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <CardContent className="pt-2.5 pb-2 px-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Accounted
                 </p>
-                <p className="text-2xl font-bold mt-1">
+                <p className="text-xl font-bold mt-0.5">
                   {totalAccounted.toLocaleString()}
                 </p>
-                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
             <Card
@@ -515,26 +500,26 @@ export default function DailyPage() {
                   : "border-red-500 bg-red-50 dark:bg-red-950/20"
               )}
             >
-              <CardContent className="pt-4 pb-3 px-4">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <CardContent className="pt-2.5 pb-2 px-3">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                   Remaining
                 </p>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-1.5 mt-0.5">
                   {isBalanced ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
                   ) : (
-                    <AlertCircle className="h-5 w-5 text-red-600" />
+                    <AlertCircle className="h-4 w-4 text-red-600" />
                   )}
                   <p
                     className={cn(
-                      "text-2xl font-bold",
+                      "text-xl font-bold",
                       isBalanced ? "text-green-600" : "text-red-600"
                     )}
                   >
                     {remaining.toLocaleString()}
                   </p>
                 </div>
-                <p className="text-xs text-muted-foreground">{productionUnit}</p>
+                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
               </CardContent>
             </Card>
           </div>
@@ -554,14 +539,11 @@ export default function DailyPage() {
           {/* Production Edit (when not closed) */}
           {!isClosed && (
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Production</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
+              <CardContent className="pt-3 pb-3">
+                <div className="flex items-center gap-3">
                   <div className="flex-1 max-w-xs space-y-1">
-                    <Label htmlFor="production-edit">
-                      Daily Production ({productionUnit})
+                    <Label htmlFor="production-edit" className="text-xs">
+                      Production ({productionUnit})
                     </Label>
                     <Input
                       id="production-edit"
@@ -579,26 +561,26 @@ export default function DailyPage() {
 
           {/* Loss / Gain Entries */}
           <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">
+            <CardContent className="pt-3 pb-3">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-medium">
                   {isGainDay ? "Gain" : "Loss"} Entries ({lossEntries.length})
-                </CardTitle>
+                </span>
                 {!isClosed && (
                   <Button
                     size="sm"
                     variant="outline"
+                    className="h-7 text-xs"
                     onClick={handleAddLossEntry}
                   >
-                    <Plus className="h-4 w-4 mr-1" />
+                    <Plus className="h-3.5 w-3.5 mr-1" />
                     Add {isGainDay ? "Gain" : "Loss"}
                   </Button>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <div className="space-y-3">
               {lossEntries.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="text-center py-4 text-muted-foreground">
                   <p>No {isGainDay ? "gain" : "loss"} entries yet.</p>
                   {!isClosed && (
                     <p className="text-sm mt-1">
@@ -619,7 +601,7 @@ export default function DailyPage() {
                   <div
                     key={entry.id}
                     className={cn(
-                      "grid grid-cols-1 md:grid-cols-12 gap-3 p-4 rounded-lg border bg-card",
+                      "grid grid-cols-1 md:grid-cols-12 gap-2 p-3 rounded-lg border bg-card",
                       isClosed && "opacity-80"
                     )}
                   >
@@ -766,32 +748,33 @@ export default function DailyPage() {
               })}
 
               {lossEntries.length > 0 && !isClosed && (
-                <div className="flex justify-center pt-2">
+                <div className="flex justify-center pt-1">
                   <Button
                     variant="outline"
                     size="sm"
+                    className="h-7 text-xs"
                     onClick={handleAddLossEntry}
                   >
-                    <Plus className="h-4 w-4 mr-1" />
+                    <Plus className="h-3.5 w-3.5 mr-1" />
                     Add Another Loss
                   </Button>
                 </div>
               )}
+              </div>
             </CardContent>
           </Card>
 
           {/* Day Comments */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Day Comments</CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="pt-3 pb-3">
+              <Label className="text-xs text-muted-foreground">Day Comments</Label>
               <Textarea
-                placeholder="Add any overall notes for this production day..."
+                placeholder="Overall notes for this day..."
                 value={dayComments}
                 onChange={(e) => handleDayCommentsChange(e.target.value)}
                 disabled={isClosed}
-                rows={3}
+                rows={2}
+                className="mt-1"
               />
             </CardContent>
           </Card>
@@ -799,31 +782,31 @@ export default function DailyPage() {
           {/* Close Day Action */}
           {!isClosed && (
             <Card>
-              <CardContent className="pt-6 pb-6">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <CardContent className="pt-3 pb-3">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
                   <div className="text-center sm:text-left">
-                    <p className="font-medium">
+                    <p className="text-sm font-medium">
                       {isBalanced
-                        ? `All ${isGainDay ? "gains" : "losses"} are accounted for. Ready to close.`
-                        : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining to account for.`}
+                        ? `All ${isGainDay ? "gains" : "losses"} accounted for. Ready to close.`
+                        : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining.`}
                     </p>
-                    <p className="text-sm text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5">
                       {isBalanced
-                        ? "Closing the day will lock all entries from further edits."
-                        : `All ${isGainDay ? "gains" : "losses"} must be accounted for before closing the day.`}
+                        ? "Closing locks all entries from further edits."
+                        : `All ${isGainDay ? "gains" : "losses"} must be accounted for first.`}
                     </p>
                   </div>
                   <Button
-                    size="lg"
+                    size="sm"
                     onClick={handleCloseDay}
                     disabled={!isBalanced || saving}
                     className={cn(
-                      "min-w-[140px]",
+                      "min-w-[120px]",
                       isBalanced &&
                         "bg-green-600 hover:bg-green-700 text-white"
                     )}
                   >
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
                     Close Day
                   </Button>
                 </div>
@@ -834,22 +817,23 @@ export default function DailyPage() {
           {/* Closed Day Banner */}
           {isClosed && (
             <Card className="border-muted bg-muted/30">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 text-muted-foreground">
-                    <Lock className="h-5 w-5" />
-                    <p className="font-medium">
-                      This day has been closed and is read-only.
+              <CardContent className="pt-3 pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Lock className="h-4 w-4" />
+                    <p className="text-sm font-medium">
+                      Day closed — read-only.
                     </p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
+                    className="h-7 text-xs"
                     onClick={handleReopenDay}
                     disabled={saving}
                   >
-                    <Unlock className="h-4 w-4 mr-1" />
-                    Reopen Day
+                    <Unlock className="h-3.5 w-3.5 mr-1" />
+                    Reopen
                   </Button>
                 </div>
               </CardContent>

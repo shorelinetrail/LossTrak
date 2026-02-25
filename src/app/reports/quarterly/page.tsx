@@ -280,19 +280,16 @@ export default function QuarterlyReportPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-3 p-4">
       {/* Header & Selectors */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Quarterly Report
-          </h1>
-          <p className="text-muted-foreground">
-            Production and loss analysis for{" "}
+          <h1 className="text-lg font-semibold tracking-tight">Quarterly Report</h1>
+          <p className="text-sm text-muted-foreground">
             {QUARTER_LABELS[selectedQuarter - 1]} {selectedYear}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <Select
             value={String(selectedQuarter)}
             onValueChange={(val) => setSelectedQuarter(Number(val))}
@@ -327,7 +324,7 @@ export default function QuarterlyReportPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -336,7 +333,7 @@ export default function QuarterlyReportPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalProduction.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -351,7 +348,7 @@ export default function QuarterlyReportPage() {
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalBAR.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -366,7 +363,7 @@ export default function QuarterlyReportPage() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalLosses.toLocaleString(undefined, {
                 maximumFractionDigits: 1,
               })}
@@ -389,7 +386,7 @@ export default function QuarterlyReportPage() {
           <CardContent>
             <div
               className={cn(
-                "text-2xl font-bold",
+                "text-xl font-bold",
                 utilization >= 80 ? "text-green-600" : "text-red-600"
               )}
             >
@@ -403,10 +400,10 @@ export default function QuarterlyReportPage() {
       {/* Monthly Totals Bar Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Monthly Totals</CardTitle>
+          <CardTitle className="text-sm">Monthly Totals</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={monthlyBarData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" fontSize={12} />
@@ -424,7 +421,7 @@ export default function QuarterlyReportPage() {
       {/* Pie/Donut Chart - Loss Distribution by Category */}
       <Card>
         <CardHeader>
-          <CardTitle>Loss Distribution by Category</CardTitle>
+          <CardTitle className="text-sm">Loss Distribution by Category</CardTitle>
         </CardHeader>
         <CardContent>
           {pieData.length === 0 ? (
@@ -432,7 +429,7 @@ export default function QuarterlyReportPage() {
               No loss data for this quarter.
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={400}>
+            <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
                   data={pieData}
@@ -465,7 +462,7 @@ export default function QuarterlyReportPage() {
       {/* Category Summary Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Losses per Category</CardTitle>
+          <CardTitle className="text-sm">Losses per Category</CardTitle>
         </CardHeader>
         <CardContent>
           {categorySummary.length === 0 ? (
@@ -559,10 +556,10 @@ export default function QuarterlyReportPage() {
       {/* Production Trend Line Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Production Trend</CardTitle>
+          <CardTitle className="text-sm">Production Trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={280}>
             <LineChart data={productionTrendData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" fontSize={12} />

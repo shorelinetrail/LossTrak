@@ -112,59 +112,59 @@ export default function ReviewPage() {
   }, [logs]);
 
   return (
-    <div className="container mx-auto py-6 px-4 space-y-6">
+    <div className="container mx-auto py-4 px-4 space-y-3">
       <div className="flex items-center gap-2">
-        <FileText className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Review / History</h1>
+        <FileText className="h-5 w-5" />
+        <h1 className="text-lg font-semibold">Review / History</h1>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 pt-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Total Days Logged
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{stats.totalDays}</p>
+            <p className="text-xl font-bold">{stats.totalDays}</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 pt-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Days Closed
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-green-600">
+            <p className="text-xl font-bold text-green-600">
               {stats.daysClosed}
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 pt-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Days Open
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-yellow-600">
+            <p className="text-xl font-bold text-yellow-600">
               {stats.daysOpen}
             </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
+          <CardHeader className="pb-1 pt-3">
+            <CardTitle className="text-xs font-medium text-muted-foreground">
               Average Production
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="text-xl font-bold">
               {stats.averageProduction.toFixed(1)}{" "}
               <span className="text-sm font-normal text-muted-foreground">
                 {productionUnit}
@@ -176,14 +176,14 @@ export default function ReviewPage() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filters</span>
+        <CardContent className="pt-3 pb-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-medium">Filters</span>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 flex-1">
+            <div className="flex flex-col sm:flex-row gap-3 flex-1">
               <div className="w-full sm:w-[180px]">
                 <Select
                   value={statusFilter}
@@ -252,7 +252,7 @@ export default function ReviewPage() {
 
       {/* Table */}
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="pt-3 pb-3">
           {filteredLogs.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -268,42 +268,42 @@ export default function ReviewPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Production</TableHead>
-                    <TableHead className="text-right">BAR</TableHead>
-                    <TableHead className="text-right">Delta</TableHead>
-                    <TableHead className="text-right">Accounted</TableHead>
-                    <TableHead className="text-right">Remaining</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead className="text-center">Actions</TableHead>
+                    <TableHead className="text-xs h-8">Date</TableHead>
+                    <TableHead className="text-xs h-8 text-right">Production</TableHead>
+                    <TableHead className="text-xs h-8 text-right">BAR</TableHead>
+                    <TableHead className="text-xs h-8 text-right">Delta</TableHead>
+                    <TableHead className="text-xs h-8 text-right">Accounted</TableHead>
+                    <TableHead className="text-xs h-8 text-right">Remaining</TableHead>
+                    <TableHead className="text-xs h-8 text-center">Status</TableHead>
+                    <TableHead className="text-xs h-8 text-center">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLogs.map((log) => (
                       <TableRow key={log.date}>
-                        <TableCell className="font-medium">
+                        <TableCell className="text-xs py-1.5 font-medium">
                           {format(parseISO(log.date), "MMM d, yyyy")}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
                           {log.production.toFixed(1)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
                           {log.bar.toFixed(1)}
                         </TableCell>
                         <TableCell
                           className={cn(
-                            "text-right font-medium",
+                            "text-xs py-1.5 text-right font-medium tabular-nums",
                             log.delta > 0 ? "text-orange-600" : "text-muted-foreground"
                           )}
                         >
                           {log.delta.toFixed(1)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
                           {log.accounted.toFixed(1)}
                         </TableCell>
                         <TableCell
                           className={cn(
-                            "text-right font-medium",
+                            "text-xs py-1.5 text-right font-medium tabular-nums",
                             log.remaining > 0
                               ? "text-yellow-600"
                               : log.remaining < 0
@@ -313,7 +313,7 @@ export default function ReviewPage() {
                         >
                           {log.remaining.toFixed(1)}
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-xs py-1.5 text-center">
                           <Badge
                             variant={
                               log.status === "closed" ? "default" : "secondary"
@@ -327,10 +327,10 @@ export default function ReviewPage() {
                             {log.status === "closed" ? "Closed" : "Open"}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="text-xs py-1.5 text-center">
                           <Link href={`/daily?date=${log.date}`}>
-                            <Button variant="ghost" size="sm">
-                              <ExternalLink className="h-4 w-4 mr-1" />
+                            <Button variant="ghost" size="sm" className="h-6 text-xs px-2">
+                              <ExternalLink className="h-3 w-3 mr-1" />
                               View
                             </Button>
                           </Link>
