@@ -38,6 +38,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -301,6 +302,35 @@ export default function BulkUploadPage() {
     }
   }, [validRows, dateGroups, bar, categoryByName, subcategoryByName]);
 
+  const handleDownloadTemplate = useCallback(() => {
+    const header = "date,production,category,subcategory,loss_type,amount,comments";
+    const today = new Date().toISOString().split("T")[0];
+    const rows: string[] = [header];
+
+    // Generate one example row per subcategory using actual configured data
+    for (const cat of categories) {
+      const catSubs = subcategories.filter(
+        (s) => s.categoryId === cat.id && s.isActive
+      );
+      const lossType = cat.allowedLossTypes?.[0] ?? "slowdown";
+      for (const sub of catSubs) {
+        rows.push(
+          `${today},${bar},${cat.name},${sub.name},${lossType},0,`
+        );
+      }
+    }
+
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `losstrak-upload-template.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [categories, subcategories, bar]);
+
   const handleFileUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -353,6 +383,19 @@ export default function BulkUploadPage() {
           <div className="mt-1 text-xs text-muted-foreground">
             <strong>BAR:</strong> {bar.toLocaleString()} {productionUnit}
           </div>
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Download Template
+            </Button>
+            <span className="ml-2 text-xs text-muted-foreground">
+              Pre-filled with your categories, subcategories, and BAR rate
+            </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -396,6 +439,14 @@ export default function BulkUploadPage() {
               }}
             >
               Load Example
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadTemplate}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              Download Template
             </Button>
           </div>
         </CardContent>
