@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getBarRate, getProductionUnit, setConfig } from "@/lib/store";
+import { getBarRate, getProductionUnit, getOperatingHours, setConfig } from "@/lib/store";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,13 +11,16 @@ import { toast } from "sonner";
 export default function SettingsPage() {
   const [barRate, setBarRate] = useState<number>(0);
   const [productionUnit, setProductionUnit] = useState<string>("");
+  const [operatingHours, setOperatingHours] = useState<number>(24);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const currentBar = getBarRate();
     const currentUnit = getProductionUnit();
+    const currentHours = getOperatingHours();
     setBarRate(currentBar);
     setProductionUnit(currentUnit);
+    setOperatingHours(currentHours);
   }, []);
 
   const handleSave = async () => {
@@ -33,9 +36,15 @@ export default function SettingsPage() {
         setIsSaving(false);
         return;
       }
+      if (operatingHours <= 0 || operatingHours > 24) {
+        toast.error("Operating hours must be between 0 and 24.");
+        setIsSaving(false);
+        return;
+      }
 
       setConfig("bar_rate", barRate);
       setConfig("production_unit", productionUnit.trim());
+      setConfig("operating_hours", operatingHours);
       toast.success("Settings saved successfully.");
     } catch {
       toast.error("Failed to save settings. Please try again.");
@@ -89,6 +98,25 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">
               The unit of measurement for production output (e.g., tonnes,
               barrels, litres).
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="operating-hours">Operating Hours per Day</Label>
+            <Input
+              id="operating-hours"
+              type="number"
+              min={0.5}
+              max={24}
+              step="any"
+              placeholder="e.g. 24"
+              value={operatingHours || ""}
+              onChange={(e) => setOperatingHours(parseFloat(e.target.value) || 0)}
+            />
+            <p className="text-sm text-muted-foreground">
+              Hours of operation per day. Used to convert between hours and{" "}
+              {productionUnit || "production units"} on loss entries (hourly rate
+              = BAR / operating hours).
             </p>
           </div>
 

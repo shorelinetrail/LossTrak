@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getBarRate,
   getProductionUnit,
+  getOperatingHours,
   getCategories,
   getSubcategories,
   getDetailCodes,
@@ -65,10 +66,15 @@ export default function DailyPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [bar, setBar] = useState<number>(0);
+  const [operatingHours, setOperatingHours] = useState<number>(24);
   const [productionUnit, setProductionUnit] = useState<string>("units");
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
   const [detailCodes, setDetailCodes] = useState<LossDetailCode[]>([]);
+
+  // Per-entry input unit: determines what the user types (stored amount is always in production units)
+  type AmountUnit = "production" | "hours" | "days";
+  const [entryUnits, setEntryUnits] = useState<Record<string, AmountUnit>>({});
 
   const [dailyLog, setDailyLog] = useState<DailyLog | null>(null);
   const [lossEntries, setLossEntries] = useState<LossEntry[]>([]);
@@ -90,15 +96,17 @@ export default function DailyPage() {
   useEffect(() => {
     const loadConfig = async () => {
       try {
-        const [barVal, unit, cats, subs, codes] = await Promise.all([
+        const [barVal, unit, opHours, cats, subs, codes] = await Promise.all([
           getBarRate(),
           getProductionUnit(),
+          getOperatingHours(),
           getCategories(),
           getSubcategories(),
           getDetailCodes(),
         ]);
         setBar(barVal);
         setProductionUnit(unit);
+        setOperatingHours(opHours);
         setCategories(cats);
         setSubcategories(subs);
         setDetailCodes(codes);
@@ -149,6 +157,25 @@ export default function DailyPage() {
   );
   const remaining = Math.round((absDelta - totalAccounted) * 100) / 100;
   const isBalanced = Math.abs(remaining) < 0.01;
+
+  // Unit conversion: production units ↔ hours ↔ days
+  const hourlyRate = operatingHours > 0 ? bar / operatingHours : 0;
+  const toProductionUnits = useCallback(
+    (value: number, unit: AmountUnit): number => {
+      if (unit === "hours") return value * hourlyRate;
+      if (unit === "days") return value * bar;
+      return value;
+    },
+    [hourlyRate, bar]
+  );
+  const fromProductionUnits = useCallback(
+    (value: number, unit: AmountUnit): number => {
+      if (unit === "hours") return hourlyRate > 0 ? value / hourlyRate : 0;
+      if (unit === "days") return bar > 0 ? value / bar : 0;
+      return value;
+    },
+    [hourlyRate, bar]
+  );
 
   // Start accounting for a new day
   const handleStartAccounting = useCallback(async () => {
@@ -306,9 +333,9 @@ export default function DailyPage() {
     }
   }, [dailyLog, dateKey]);
 
-  // Carry forward entries from a previous day (copies structure, zeroes amounts)
+  // Carry forward entries from a previous day
   const handleCarryForward = useCallback(
-    async (previousEntries: LossEntry[]) => {
+    async (previousEntries: LossEntry[], withAmounts = false) => {
       if (!dailyLog || isClosed) return;
       try {
         const newEntries: LossEntry[] = [];
@@ -320,14 +347,18 @@ export default function DailyPage() {
             subcategoryId: prev.subcategoryId,
             detailCodeId: prev.detailCodeId ?? "",
             lossType: prev.lossType,
-            amount: 0, // zero - engineer fills in today's values
+            amount: withAmounts ? prev.amount : 0,
             comments: prev.comments,
           });
           newEntries.push(entry);
         }
         setLossEntries((existing) => [...existing, ...newEntries]);
+        const count = newEntries.length;
+        const label = count === 1 ? "entry" : "entries";
         toast.success(
-          `Carried forward ${newEntries.length} loss ${newEntries.length === 1 ? "entry" : "entries"} from previous day. Adjust amounts for today.`
+          withAmounts
+            ? `Copied ${count} ${label} with amounts.`
+            : `Carried forward ${count} ${label}. Adjust amounts for today.`
         );
       } catch {
         toast.error("Failed to carry forward entries.");
@@ -744,27 +775,59 @@ export default function DailyPage() {
                         </Select>
                       </div>
 
-                      {/* Amount */}
-                      <div className="md:col-span-1 space-y-1">
-                        <Label className="text-xs">
-                          Amount
-                        </Label>
-                        <Input
-                          type="number"
-                          min="0"
-                          step="any"
-                          placeholder="0"
-                          value={entry.amount || ""}
-                          onChange={(e) =>
-                            handleUpdateLossEntry(
-                              entry.id,
-                              "amount",
-                              parseFloat(e.target.value) || 0
-                            )
-                          }
-                          disabled={isClosed}
-                        />
-                      </div>
+                      {/* Amount with unit conversion */}
+                      {(() => {
+                        const unit = entryUnits[entry.id] || "production";
+                        const unitLabel =
+                          unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
+                        const displayValue =
+                          unit === "production"
+                            ? entry.amount || ""
+                            : entry.amount
+                              ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4))
+                              : "";
+                        return (
+                          <div className="md:col-span-1 space-y-1">
+                            <Label className="text-xs flex items-baseline gap-1">
+                              Amount
+                              <button
+                                type="button"
+                                className="text-[10px] text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+                                onClick={() => {
+                                  const order: AmountUnit[] = ["production", "hours", "days"];
+                                  const next = order[(order.indexOf(unit) + 1) % order.length];
+                                  setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
+                                }}
+                                disabled={isClosed}
+                              >
+                                {unitLabel}
+                              </button>
+                            </Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="any"
+                              placeholder="0"
+                              value={displayValue}
+                              onChange={(e) => {
+                                const raw = parseFloat(e.target.value) || 0;
+                                const inProdUnits = toProductionUnits(raw, unit);
+                                handleUpdateLossEntry(
+                                  entry.id,
+                                  "amount",
+                                  Math.round(inProdUnits * 100) / 100
+                                );
+                              }}
+                              disabled={isClosed}
+                            />
+                            {unit !== "production" && entry.amount > 0 && (
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                = {entry.amount.toLocaleString()} {productionUnit}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
 
                       {/* Comments */}
                       <div className="md:col-span-2 space-y-1">

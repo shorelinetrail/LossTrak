@@ -113,6 +113,7 @@ const DEFAULT_SUBCATEGORIES: Record<
 const DEFAULT_CONFIG: { key: string; value: string }[] = [
   { key: "bar_rate", value: "1200" },
   { key: "production_unit", value: "tonnes" },
+  { key: "operating_hours", value: "24" },
 ];
 
 export function initializeStore(): void {
@@ -422,6 +423,11 @@ export function getBarRate(): number {
 
 export function getProductionUnit(): string {
   return getConfig("production_unit") || getConfig("productionUnit") || "tonnes";
+}
+
+export function getOperatingHours(): number {
+  const val = getConfig("operating_hours") || getConfig("operatingHours");
+  return val ? parseFloat(val) : 24;
 }
 
 export function setConfig(key: string, value: string | number): void {

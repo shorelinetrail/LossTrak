@@ -58,7 +58,7 @@ interface LossContextPanelProps {
   subcategories: LossSubcategory[];
   productionUnit: string;
   todayDelta?: number;
-  onCarryForward: (entries: LossEntry[]) => void;
+  onCarryForward: (entries: LossEntry[], withAmounts?: boolean) => void;
   disabled?: boolean;
 }
 
@@ -503,15 +503,39 @@ export function LossContextPanel({
                         </p>
                       </div>
                       {!disabled && insight.entries.length > 0 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-[10px] px-2 shrink-0"
-                          onClick={() => onCarryForward(insight.entries)}
-                        >
-                          <Copy className="h-3 w-3 mr-1" />
-                          Copy
-                        </Button>
+                        <span className="flex gap-0.5 shrink-0">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] px-2"
+                                onClick={() => onCarryForward(insight.entries)}
+                              >
+                                <Copy className="h-3 w-3 mr-1" />
+                                Copy
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Copy structure only (amounts zeroed)
+                            </TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] px-1.5"
+                                onClick={() => onCarryForward(insight.entries, true)}
+                              >
+                                <ArrowDownToLine className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="text-xs">
+                              Copy with amounts
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
                       )}
                     </div>
                   ))}
@@ -855,27 +879,44 @@ export function LossContextPanel({
                       {entry.comments || "\u2014"}
                     </span>
                     {!disabled && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 w-5 p-0 shrink-0"
-                            onClick={() => onCarryForward([entry])}
-                          >
-                            <ArrowDownToLine className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className="text-xs">
-                          Copy to today
-                        </TooltipContent>
-                      </Tooltip>
+                      <span className="flex gap-0.5 shrink-0">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => onCarryForward([entry])}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="text-xs">
+                            Copy structure only
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 w-5 p-0"
+                              onClick={() => onCarryForward([entry], true)}
+                            >
+                              <ArrowDownToLine className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="text-xs">
+                            Copy with amount
+                          </TooltipContent>
+                        </Tooltip>
+                      </span>
                     )}
                   </div>
                 ))}
               </div>
               {!disabled && selectedCellEntries.length > 1 && (
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-1">
                   <Button
                     variant="outline"
                     size="sm"
@@ -883,8 +924,24 @@ export function LossContextPanel({
                     onClick={() => onCarryForward(selectedCellEntries)}
                   >
                     <Copy className="h-3 w-3" />
-                    Copy all to today
+                    Copy all
                   </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs gap-1"
+                        onClick={() => onCarryForward(selectedCellEntries, true)}
+                      >
+                        <ArrowDownToLine className="h-3 w-3" />
+                        With amounts
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      Copy all entries with their amounts
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
               )}
             </div>
