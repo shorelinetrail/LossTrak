@@ -14,16 +14,9 @@ import {
 } from "@/lib/store";
 import { LossCategory, LossSubcategory, LossEntry } from "@/types";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -350,64 +343,31 @@ export default function BulkUploadPage() {
   );
 
   return (
-    <div className="container mx-auto max-w-5xl py-6 px-4 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Bulk Upload</h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Import production data and loss entries for multiple days at once
-        </p>
+    <div className="container mx-auto max-w-5xl py-4 px-4 space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-lg font-semibold tracking-tight">Bulk Upload</h1>
+        <span className="text-xs text-muted-foreground">
+          BAR: {bar.toLocaleString()} {productionUnit} &middot; {categories.length} categories
+        </span>
       </div>
 
-      <Separator />
-
-      {/* Format Guide */}
+      {/* Combined Format + Input */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">CSV Format</CardTitle>
-          <CardDescription>
-            Each row represents one loss entry. Rows with the same date share
-            the same daily production total. Categories and subcategories must
-            match existing names (case-insensitive).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="rounded-md bg-muted/50 p-3 text-xs font-mono overflow-x-auto whitespace-pre">
-            {EXAMPLE_CSV}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-            <span>
-              <strong>Categories:</strong>{" "}
-              {categories.map((c) => c.name).join(", ")}
-            </span>
-          </div>
-          <div className="mt-1 text-xs text-muted-foreground">
-            <strong>BAR:</strong> {bar.toLocaleString()} {productionUnit}
-          </div>
-          <div className="mt-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadTemplate}
-            >
-              <Download className="h-4 w-4 mr-1" />
-              Download Template
-            </Button>
-            <span className="ml-2 text-xs text-muted-foreground">
-              Pre-filled with your categories, subcategories, and BAR rate
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Input */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Paste or Upload CSV</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="pt-4 pb-3 space-y-3">
+          <details className="group">
+            <summary className="text-xs font-medium cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
+              CSV format reference
+            </summary>
+            <div className="mt-2 rounded bg-muted/50 p-2 text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed">
+              {EXAMPLE_CSV}
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              One row per loss entry. Same-date rows share production total. Category/subcategory names are case-insensitive.
+            </p>
+          </details>
           <Textarea
             placeholder="Paste CSV data here..."
-            rows={10}
+            rows={6}
             className="font-mono text-xs"
             value={csvText}
             onChange={(e) => {
@@ -415,7 +375,7 @@ export default function BulkUploadPage() {
               setResults(null);
             }}
           />
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <label className="cursor-pointer">
               <input
                 type="file"
@@ -423,16 +383,17 @@ export default function BulkUploadPage() {
                 className="hidden"
                 onChange={handleFileUpload}
               />
-              <Button variant="outline" size="sm" asChild>
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
                 <span>
-                  <FileSpreadsheet className="h-4 w-4 mr-1" />
-                  Upload CSV File
+                  <FileSpreadsheet className="h-3.5 w-3.5 mr-1" />
+                  Upload File
                 </span>
               </Button>
             </label>
             <Button
               variant="outline"
               size="sm"
+              className="h-7 text-xs"
               onClick={() => {
                 setCsvText(EXAMPLE_CSV);
                 setResults(null);
@@ -443,9 +404,10 @@ export default function BulkUploadPage() {
             <Button
               variant="outline"
               size="sm"
+              className="h-7 text-xs"
               onClick={handleDownloadTemplate}
             >
-              <Download className="h-4 w-4 mr-1" />
+              <Download className="h-3.5 w-3.5 mr-1" />
               Download Template
             </Button>
           </div>
@@ -455,39 +417,34 @@ export default function BulkUploadPage() {
       {/* Validation */}
       {parsed.length > 0 && (
         <Card>
-          <CardHeader>
+          <CardContent className="pt-3 pb-3 space-y-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Validation</CardTitle>
-              <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">Validation</span>
+              <div className="flex items-center gap-1.5">
                 {validRows.length > 0 && (
-                  <Badge variant="secondary" className="gap-1">
-                    <CheckCircle2 className="h-3 w-3 text-green-600" />
+                  <Badge variant="secondary" className="gap-1 h-5 text-[10px]">
+                    <CheckCircle2 className="h-2.5 w-2.5 text-green-600" />
                     {validRows.length} valid
                   </Badge>
                 )}
                 {errorRows.length > 0 && (
-                  <Badge variant="destructive" className="gap-1">
-                    <AlertCircle className="h-3 w-3" />
+                  <Badge variant="destructive" className="gap-1 h-5 text-[10px]">
+                    <AlertCircle className="h-2.5 w-2.5" />
                     {errorRows.length} errors
                   </Badge>
                 )}
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
+
             {/* Error rows */}
             {errorRows.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-destructive">
-                  Rows with errors (will be skipped):
-                </p>
+              <div className="space-y-0.5">
                 {errorRows.map((row) => (
                   <div
                     key={row.line}
-                    className="text-xs rounded border border-destructive/30 bg-destructive/5 px-3 py-1.5"
+                    className="text-[11px] rounded border border-destructive/30 bg-destructive/5 px-2 py-1"
                   >
-                    <span className="font-medium">Line {row.line}:</span>{" "}
-                    {row.error}
+                    <span className="font-medium">L{row.line}:</span> {row.error}
                   </div>
                 ))}
               </div>
@@ -495,68 +452,58 @@ export default function BulkUploadPage() {
 
             {/* Date summary */}
             {dateGroups.length > 0 && (
-              <div>
-                <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Summary by date:
-                </p>
-                <div className="rounded-md border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs h-8">Date</TableHead>
-                        <TableHead className="text-xs h-8">
-                          Production
-                        </TableHead>
-                        <TableHead className="text-xs h-8">Entries</TableHead>
-                        <TableHead className="text-xs h-8">
-                          Total Amount
-                        </TableHead>
-                        <TableHead className="text-xs h-8">Delta</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {dateGroups.map(([date, rows]) => {
-                        const prod = rows[0].production;
-                        const totalAmount = rows.reduce(
-                          (s, r) => s + r.amount,
-                          0
-                        );
-                        const delta = bar - prod;
-                        const isBalanced =
-                          Math.abs(Math.abs(delta) - totalAmount) < 0.01;
-                        return (
-                          <TableRow key={date}>
-                            <TableCell className="text-xs py-1.5 font-medium">
-                              {date}
-                            </TableCell>
-                            <TableCell className="text-xs py-1.5 tabular-nums">
-                              {prod.toLocaleString()} {productionUnit}
-                            </TableCell>
-                            <TableCell className="text-xs py-1.5">
-                              {rows.length}
-                            </TableCell>
-                            <TableCell className="text-xs py-1.5 tabular-nums">
-                              {totalAmount.toLocaleString()} {productionUnit}
-                            </TableCell>
-                            <TableCell className="text-xs py-1.5">
-                              <span
-                                className={cn(
-                                  "tabular-nums",
-                                  isBalanced
-                                    ? "text-green-600"
-                                    : "text-orange-600"
-                                )}
-                              >
-                                {Math.abs(delta).toLocaleString()} (
-                                {isBalanced ? "balanced" : "unbalanced"})
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+              <div className="rounded-md border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-[11px] h-7 py-0">Date</TableHead>
+                      <TableHead className="text-[11px] h-7 py-0">Production</TableHead>
+                      <TableHead className="text-[11px] h-7 py-0">Entries</TableHead>
+                      <TableHead className="text-[11px] h-7 py-0">Total</TableHead>
+                      <TableHead className="text-[11px] h-7 py-0">Delta</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {dateGroups.map(([date, rows]) => {
+                      const prod = rows[0].production;
+                      const totalAmount = rows.reduce(
+                        (s, r) => s + r.amount,
+                        0
+                      );
+                      const delta = bar - prod;
+                      const isBalanced =
+                        Math.abs(Math.abs(delta) - totalAmount) < 0.01;
+                      return (
+                        <TableRow key={date}>
+                          <TableCell className="text-[11px] py-1 font-medium">
+                            {date}
+                          </TableCell>
+                          <TableCell className="text-[11px] py-1 tabular-nums">
+                            {prod.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-[11px] py-1">
+                            {rows.length}
+                          </TableCell>
+                          <TableCell className="text-[11px] py-1 tabular-nums">
+                            {totalAmount.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-[11px] py-1">
+                            <span
+                              className={cn(
+                                "tabular-nums",
+                                isBalanced
+                                  ? "text-green-600"
+                                  : "text-orange-600"
+                              )}
+                            >
+                              {Math.abs(delta).toLocaleString()} {isBalanced ? "ok" : "unbal."}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
               </div>
             )}
 
@@ -566,12 +513,13 @@ export default function BulkUploadPage() {
                 <Button
                   onClick={handleImport}
                   disabled={importing}
-                  className="gap-1"
+                  size="sm"
+                  className="gap-1 h-7 text-xs"
                 >
                   {importing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Upload className="h-4 w-4" />
+                    <Upload className="h-3.5 w-3.5" />
                   )}
                   Import {validRows.length} Entries
                 </Button>
@@ -584,52 +532,48 @@ export default function BulkUploadPage() {
       {/* Results */}
       {results && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              Import Complete
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-3 pb-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span className="text-sm font-medium">Import Complete</span>
+            </div>
             <div className="rounded-md border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs h-8">Date</TableHead>
-                    <TableHead className="text-xs h-8">Production</TableHead>
-                    <TableHead className="text-xs h-8">
-                      Entries Created
-                    </TableHead>
-                    <TableHead className="text-xs h-8">Status</TableHead>
+                    <TableHead className="text-[11px] h-7 py-0">Date</TableHead>
+                    <TableHead className="text-[11px] h-7 py-0">Production</TableHead>
+                    <TableHead className="text-[11px] h-7 py-0">Created</TableHead>
+                    <TableHead className="text-[11px] h-7 py-0">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {results.map((r) => (
                     <TableRow key={r.date}>
-                      <TableCell className="text-xs py-1.5 font-medium">
+                      <TableCell className="text-[11px] py-1 font-medium">
                         {r.date}
                       </TableCell>
-                      <TableCell className="text-xs py-1.5 tabular-nums">
-                        {r.production.toLocaleString()} {productionUnit}
+                      <TableCell className="text-[11px] py-1 tabular-nums">
+                        {r.production.toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-xs py-1.5">
+                      <TableCell className="text-[11px] py-1">
                         {r.entriesCreated}
                       </TableCell>
-                      <TableCell className="text-xs py-1.5">
+                      <TableCell className="text-[11px] py-1">
                         <Badge
                           variant={
                             r.status === "created" ? "default" : "secondary"
                           }
-                          className="text-[10px]"
+                          className="text-[10px] h-4"
                         >
                           {r.status === "created"
-                            ? "New day"
+                            ? "New"
                             : r.status === "updated"
-                              ? "Existing day"
+                              ? "Updated"
                               : "Skipped"}
                         </Badge>
                         {r.message && (
-                          <span className="ml-2 text-muted-foreground">
+                          <span className="ml-1.5 text-[11px] text-muted-foreground">
                             {r.message}
                           </span>
                         )}
@@ -639,10 +583,11 @@ export default function BulkUploadPage() {
                 </TableBody>
               </Table>
             </div>
-            <div className="mt-4 flex justify-end gap-2">
+            <div className="flex justify-end">
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 text-xs"
                 onClick={() => {
                   setCsvText("");
                   setResults(null);
