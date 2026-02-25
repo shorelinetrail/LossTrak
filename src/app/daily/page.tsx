@@ -403,16 +403,14 @@ export default function DailyPage() {
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          {!isToday(selectedDate) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs px-2 ml-0.5"
-              onClick={() => setSelectedDate(new Date())}
-            >
-              Today
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn("h-7 text-xs px-2 ml-0.5", isToday(selectedDate) && "invisible")}
+            onClick={() => setSelectedDate(new Date())}
+          >
+            Today
+          </Button>
         </div>
       </div>
 
