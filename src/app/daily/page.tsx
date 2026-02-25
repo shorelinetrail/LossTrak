@@ -406,7 +406,8 @@ export default function DailyPage() {
           <Button
             variant="ghost"
             size="sm"
-            className={cn("h-7 text-xs px-2 ml-0.5", isToday(selectedDate) && "invisible")}
+            className="h-7 text-xs px-2 ml-0.5"
+            disabled={isToday(selectedDate)}
             onClick={() => setSelectedDate(new Date())}
           >
             Today
