@@ -1050,7 +1050,7 @@ export default function DailyPage() {
                           <div
                             className={cn(
                               "h-full transition-all duration-300 ease-out cursor-default",
-                              isBalanced ? "bg-transparent" : "bg-muted-foreground/15"
+                              isBalanced ? "bg-transparent" : "bg-muted-foreground/20 dark:bg-muted-foreground/25"
                             )}
                             style={{ width: `${remainingPct}%` }}
                           />
@@ -1072,11 +1072,11 @@ export default function DailyPage() {
                           </span>
                         </div>
                       ))}
-                      {remainingPct > 0.5 && (
+                      {remainingPct > 0 && !isBalanced && (
                         <div className="flex items-center gap-1">
-                          <div className="h-2 w-2 rounded-full bg-muted-foreground/15 border border-muted-foreground/30" />
+                          <div className="h-2 w-2 rounded-full bg-muted-foreground/20 border border-muted-foreground/30" />
                           <span className="text-[10px] text-muted-foreground">
-                            Unaccounted
+                            Unaccounted ({remaining.toLocaleString()} {productionUnit})
                           </span>
                         </div>
                       )}
@@ -1206,17 +1206,17 @@ export default function DailyPage() {
                         <div className="flex items-start gap-1.5 pl-[22px]">
                           {/* Loss type toggle */}
                           {singleType ? (
-                            <Badge variant="secondary" className="h-7 text-[10px] px-2 shrink-0">
+                            <Badge variant="secondary" className="h-[26px] text-[10px] px-2 shrink-0">
                               {allowedTypes[0] === "shutdown" ? "SD" : "SL"}
                             </Badge>
                           ) : (
-                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden">
+                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden h-[26px]">
                               <button
                                 type="button"
                                 disabled={isClosed}
                                 onClick={() => handleUpdateLossEntry(entry.id, "lossType", "shutdown")}
                                 className={cn(
-                                  "h-7 px-2 text-[10px] font-medium transition-colors",
+                                  "px-2 text-[10px] font-medium transition-colors",
                                   entry.lossType === "shutdown"
                                     ? "bg-foreground text-background"
                                     : "bg-transparent text-muted-foreground hover:bg-muted"
@@ -1229,7 +1229,7 @@ export default function DailyPage() {
                                 disabled={isClosed}
                                 onClick={() => handleUpdateLossEntry(entry.id, "lossType", "slowdown")}
                                 className={cn(
-                                  "h-7 px-2 text-[10px] font-medium transition-colors border-l border-input",
+                                  "px-2 text-[10px] font-medium transition-colors border-l border-input",
                                   entry.lossType === "slowdown"
                                     ? "bg-foreground text-background"
                                     : "bg-transparent text-muted-foreground hover:bg-muted"
