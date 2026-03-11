@@ -1203,88 +1203,98 @@ export default function DailyPage() {
                         </div>
 
                         {/* Row 2: How much — Type toggle / Amount / Comments */}
-                        <div className="flex items-center gap-1.5 pl-[22px]">
-                          {/* Loss type toggle */}
-                          {singleType ? (
-                            <Badge variant="secondary" className="h-7 text-[10px] px-2 shrink-0">
-                              {allowedTypes[0] === "shutdown" ? "SD" : "SL"}
-                            </Badge>
-                          ) : (
-                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden">
-                              <button
-                                type="button"
-                                disabled={isClosed}
-                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "shutdown")}
-                                className={cn(
-                                  "h-7 px-2 text-[10px] font-medium transition-colors",
-                                  entry.lossType === "shutdown"
-                                    ? "bg-foreground text-background"
-                                    : "bg-transparent text-muted-foreground hover:bg-muted"
-                                )}
-                              >
-                                SD
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isClosed}
-                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "slowdown")}
-                                className={cn(
-                                  "h-7 px-2 text-[10px] font-medium transition-colors border-l border-input",
-                                  entry.lossType === "slowdown"
-                                    ? "bg-foreground text-background"
-                                    : "bg-transparent text-muted-foreground hover:bg-muted"
-                                )}
-                              >
-                                SL
-                              </button>
-                            </div>
-                          )}
+                        <div className="flex items-center gap-1.5">
+                          <span className="shrink-0 w-4" />
+                          <div className={cn("flex-1 grid grid-cols-1 gap-1.5", hasDetailCodes ? "md:grid-cols-[1fr_1fr_1fr]" : "md:grid-cols-[1fr_1fr]")}>
+                            {/* First col: Type toggle + Amount */}
+                            <div className="flex items-center gap-1.5">
+                              {/* Loss type toggle */}
+                              {singleType ? (
+                                <Badge variant="secondary" className="h-7 text-[10px] px-2 shrink-0">
+                                  {allowedTypes[0] === "shutdown" ? "SD" : "SL"}
+                                </Badge>
+                              ) : (
+                                <div className="flex shrink-0 rounded-md border border-input overflow-hidden">
+                                  <button
+                                    type="button"
+                                    disabled={isClosed}
+                                    onClick={() => handleUpdateLossEntry(entry.id, "lossType", "shutdown")}
+                                    className={cn(
+                                      "h-7 px-2 text-[10px] font-medium transition-colors",
+                                      entry.lossType === "shutdown"
+                                        ? "bg-foreground text-background"
+                                        : "bg-transparent text-muted-foreground hover:bg-muted"
+                                    )}
+                                  >
+                                    SD
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isClosed}
+                                    onClick={() => handleUpdateLossEntry(entry.id, "lossType", "slowdown")}
+                                    className={cn(
+                                      "h-7 px-2 text-[10px] font-medium transition-colors border-l border-input",
+                                      entry.lossType === "slowdown"
+                                        ? "bg-foreground text-background"
+                                        : "bg-transparent text-muted-foreground hover:bg-muted"
+                                    )}
+                                  >
+                                    SL
+                                  </button>
+                                </div>
+                              )}
 
-                          {/* Amount with inline unit toggle */}
-                          <div className="shrink-0 w-[120px] md:w-[140px]">
-                            <div className="relative flex items-center">
+                              {/* Amount with inline unit toggle */}
+                              <div className="flex-1 min-w-0">
+                                <div className="relative flex items-center">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    placeholder="0"
+                                    className="h-7 text-xs pr-10"
+                                    value={displayValue}
+                                    onChange={(e) => {
+                                      const raw = parseFloat(e.target.value) || 0;
+                                      const inProdUnits = toProductionUnits(raw, unit);
+                                      handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100);
+                                    }}
+                                    disabled={isClosed}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={isClosed}
+                                    className="absolute right-1 h-5 px-1.5 rounded text-[9px] font-medium text-muted-foreground bg-muted hover:bg-muted-foreground/20 transition-colors"
+                                    onClick={() => {
+                                      const order: AmountUnit[] = ["production", "hours", "days"];
+                                      const next = order[(order.indexOf(unit) + 1) % order.length];
+                                      setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
+                                    }}
+                                  >
+                                    {unitLabel}
+                                  </button>
+                                </div>
+                                {unit !== "production" && entry.amount > 0 && (
+                                  <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                                    = {entry.amount.toLocaleString()} {productionUnit}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Remaining cols: Comments */}
+                            <div className={hasDetailCodes ? "md:col-span-2" : ""}>
                               <Input
-                                type="number"
-                                min="0"
-                                step="any"
-                                placeholder="0"
-                                className="h-7 text-xs pr-10"
-                                value={displayValue}
-                                onChange={(e) => {
-                                  const raw = parseFloat(e.target.value) || 0;
-                                  const inProdUnits = toProductionUnits(raw, unit);
-                                  handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100);
-                                }}
+                                placeholder="Notes..."
+                                className="h-7 text-xs"
+                                value={entry.comments ?? ""}
+                                onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)}
                                 disabled={isClosed}
                               />
-                              <button
-                                type="button"
-                                disabled={isClosed}
-                                className="absolute right-1 h-5 px-1.5 rounded text-[9px] font-medium text-muted-foreground bg-muted hover:bg-muted-foreground/20 transition-colors"
-                                onClick={() => {
-                                  const order: AmountUnit[] = ["production", "hours", "days"];
-                                  const next = order[(order.indexOf(unit) + 1) % order.length];
-                                  setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
-                                }}
-                              >
-                                {unitLabel}
-                              </button>
                             </div>
-                            {unit !== "production" && entry.amount > 0 && (
-                              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
-                                = {entry.amount.toLocaleString()} {productionUnit}
-                              </p>
-                            )}
                           </div>
-
-                          {/* Comments */}
-                          <Input
-                            placeholder="Notes..."
-                            className="h-7 text-xs flex-1 min-w-0"
-                            value={entry.comments ?? ""}
-                            onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)}
-                            disabled={isClosed}
-                          />
+                          {/* Spacer matching delete button width */}
+                          <span className="shrink-0 w-6" />
                         </div>
                       </div>
                     );
