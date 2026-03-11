@@ -1072,11 +1072,11 @@ export default function DailyPage() {
                           </span>
                         </div>
                       ))}
-                      {remainingPct > 0 && !isBalanced && (
+                      {!isBalanced && (
                         <div className="flex items-center gap-1">
-                          <div className="h-2 w-2 rounded-full bg-muted-foreground/20 border border-muted-foreground/30" />
+                          <div className={cn("h-2 w-2 rounded-full", remaining > 0 ? "bg-muted-foreground/20 border border-muted-foreground/30" : "bg-destructive/40 border border-destructive/50")} />
                           <span className="text-[10px] text-muted-foreground">
-                            Unaccounted ({remaining.toLocaleString()} {productionUnit})
+                            {remaining > 0 ? `Unaccounted (${remaining.toLocaleString()} ${productionUnit})` : `Over-accounted (${Math.abs(remaining).toLocaleString()} ${productionUnit})`}
                           </span>
                         </div>
                       )}
@@ -1203,14 +1203,14 @@ export default function DailyPage() {
                         </div>
 
                         {/* Row 2: How much — Type toggle / Amount / Comments */}
-                        <div className="flex items-start gap-1.5 pl-[22px]">
+                        <div className="flex items-center gap-1.5 pl-[22px]">
                           {/* Loss type toggle */}
                           {singleType ? (
-                            <Badge variant="secondary" className="h-[26px] text-[10px] px-2 shrink-0">
+                            <Badge variant="secondary" className="h-7 text-[10px] px-2 shrink-0">
                               {allowedTypes[0] === "shutdown" ? "SD" : "SL"}
                             </Badge>
                           ) : (
-                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden h-[26px]">
+                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden h-7">
                               <button
                                 type="button"
                                 disabled={isClosed}
