@@ -282,7 +282,7 @@ export default function DailyPage() {
   const remaining = Math.round((absDelta - totalAccounted) * 100) / 100;
   const isBalanced = Math.abs(remaining) < 0.01;
 
-  // Category colours for allocation bar
+  // Category colours for allocation bar + entry borders
   const SEGMENT_COLORS = [
     "bg-blue-500",
     "bg-amber-500",
@@ -292,6 +292,16 @@ export default function DailyPage() {
     "bg-cyan-500",
     "bg-orange-500",
     "bg-pink-500",
+  ];
+  const BORDER_COLORS = [
+    "border-l-blue-500",
+    "border-l-amber-500",
+    "border-l-rose-500",
+    "border-l-emerald-500",
+    "border-l-violet-500",
+    "border-l-cyan-500",
+    "border-l-orange-500",
+    "border-l-pink-500",
   ];
 
   const allocationSegments = useMemo(() => {
@@ -569,6 +579,15 @@ export default function DailyPage() {
       return (category.allowedLossTypes ?? ["shutdown", "slowdown"]) as LossType[];
     },
     [categories]
+  );
+
+  const getCategoryBorderColor = useCallback(
+    (categoryId: string): string => {
+      const idx = categories.findIndex((c) => c.id === categoryId);
+      if (idx < 0) return "border-l-muted-foreground/30";
+      return BORDER_COLORS[idx % BORDER_COLORS.length];
+    },
+    [categories] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const handleDateSelect = useCallback((date: Date | undefined) => {
@@ -1130,19 +1149,7 @@ export default function DailyPage() {
               )}
 
               {lossEntries.length > 0 && (
-                <div>
-                  {/* Desktop header row */}
-                  <div className="hidden md:grid md:grid-cols-12 gap-1.5 mb-1 px-0.5">
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Category</span>
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Subcategory</span>
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Detail Code</span>
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Type</span>
-                    <span className="col-span-1 text-[10px] font-medium text-muted-foreground uppercase">Amount</span>
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Comments</span>
-                    <span className="col-span-1"></span>
-                  </div>
-
-                  <div className="space-y-1.5">
+                <div className="space-y-1.5">
                   {lossEntries.map((entry, index) => {
                     const filteredSubcategories = getSubcategoriesForCategory(entry.categoryId);
                     const filteredDetailCodes = entry.subcategoryId
@@ -1150,101 +1157,141 @@ export default function DailyPage() {
                       : [];
                     const allowedTypes = getAllowedLossTypes(entry.categoryId);
                     const hasDetailCodes = filteredDetailCodes.length > 0;
+                    const unit = entryUnits[entry.id] || "production";
+                    const unitLabel = unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
+                    const displayValue = unit === "production"
+                      ? entry.amount || ""
+                      : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
+                    const singleType = allowedTypes.length === 1;
 
                     return (
                       <div
                         key={entry.id}
                         className={cn(
-                          "py-1.5 px-0.5",
-                          index > 0 && "border-t border-border/40",
-                          isClosed && "opacity-80"
+                          "border-l-2 rounded-sm pl-2.5 pr-1 py-1.5 space-y-1.5",
+                          getCategoryBorderColor(entry.categoryId),
+                          index > 0 && "mt-1.5",
+                          isClosed && "opacity-70"
                         )}
                       >
-                        <div className="md:hidden flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">#{index + 1}</span>
+                        {/* Row 1: What — Category / Subcategory / Detail Code / Delete */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-4">
+                            {index + 1}
+                          </span>
+                          <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-1.5">
+                            <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
+                              <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
+                            </Select>
+                            <Select value={entry.subcategoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)} disabled={isClosed || !entry.categoryId}>
+                              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Subcategory" /></SelectTrigger>
+                              <SelectContent>{filteredSubcategories.map((sub) => (<SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>))}</SelectContent>
+                            </Select>
+                            {hasDetailCodes && (
+                              <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
+                                <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Detail code" /></SelectTrigger>
+                                <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
+                              </Select>
+                            )}
+                          </div>
                           {!isClosed && (
-                            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive" onClick={() => handleDeleteLossEntry(entry.id)}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteLossEntry(entry.id)}>
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-1.5">
-                          <div className="md:col-span-2">
-                            <Label className="text-[10px] md:hidden">Category</Label>
-                            <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Category" /></SelectTrigger>
-                              <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
-                            </Select>
-                          </div>
-                          <div className="md:col-span-2">
-                            <Label className="text-[10px] md:hidden">Subcategory</Label>
-                            <Select value={entry.subcategoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)} disabled={isClosed || !entry.categoryId}>
-                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Subcategory" /></SelectTrigger>
-                              <SelectContent>{filteredSubcategories.map((sub) => (<SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>))}</SelectContent>
-                            </Select>
-                          </div>
-                          <div className="md:col-span-2">
-                            {hasDetailCodes ? (
-                              <>
-                                <Label className="text-[10px] md:hidden">Detail Code</Label>
-                                <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
-                                  <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Optional" /></SelectTrigger>
-                                  <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
-                                </Select>
-                              </>
-                            ) : (
-                              <div className="hidden md:block" />
+                        {/* Row 2: How much — Type toggle / Amount / Comments */}
+                        <div className="flex items-center gap-1.5 pl-[22px]">
+                          {/* Loss type toggle */}
+                          {singleType ? (
+                            <Badge variant="secondary" className="h-7 text-[10px] px-2 shrink-0">
+                              {allowedTypes[0] === "shutdown" ? "SD" : "SL"}
+                            </Badge>
+                          ) : (
+                            <div className="flex shrink-0 rounded-md border border-input overflow-hidden">
+                              <button
+                                type="button"
+                                disabled={isClosed}
+                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "shutdown")}
+                                className={cn(
+                                  "h-7 px-2 text-[10px] font-medium transition-colors",
+                                  entry.lossType === "shutdown"
+                                    ? "bg-foreground text-background"
+                                    : "bg-transparent text-muted-foreground hover:bg-muted"
+                                )}
+                              >
+                                SD
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isClosed}
+                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "slowdown")}
+                                className={cn(
+                                  "h-7 px-2 text-[10px] font-medium transition-colors border-l border-input",
+                                  entry.lossType === "slowdown"
+                                    ? "bg-foreground text-background"
+                                    : "bg-transparent text-muted-foreground hover:bg-muted"
+                                )}
+                              >
+                                SL
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Amount with inline unit toggle */}
+                          <div className="shrink-0 w-[120px] md:w-[140px]">
+                            <div className="relative flex items-center">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                className="h-7 text-xs pr-10"
+                                value={displayValue}
+                                onChange={(e) => {
+                                  const raw = parseFloat(e.target.value) || 0;
+                                  const inProdUnits = toProductionUnits(raw, unit);
+                                  handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100);
+                                }}
+                                disabled={isClosed}
+                              />
+                              <button
+                                type="button"
+                                disabled={isClosed}
+                                className="absolute right-1 h-5 px-1.5 rounded text-[9px] font-medium text-muted-foreground bg-muted hover:bg-muted-foreground/20 transition-colors"
+                                onClick={() => {
+                                  const order: AmountUnit[] = ["production", "hours", "days"];
+                                  const next = order[(order.indexOf(unit) + 1) % order.length];
+                                  setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
+                                }}
+                              >
+                                {unitLabel}
+                              </button>
+                            </div>
+                            {unit !== "production" && entry.amount > 0 && (
+                              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                                = {entry.amount.toLocaleString()} {productionUnit}
+                              </p>
                             )}
                           </div>
-                          <div className="md:col-span-2">
-                            <Label className="text-[10px] md:hidden">Loss Type</Label>
-                            <Select value={entry.lossType} onValueChange={(v) => handleUpdateLossEntry(entry.id, "lossType", v)} disabled={isClosed}>
-                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Type" /></SelectTrigger>
-                              <SelectContent>{allowedTypes.map((type) => (<SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>))}</SelectContent>
-                            </Select>
-                          </div>
-                          {(() => {
-                            const unit = entryUnits[entry.id] || "production";
-                            const unitLabel = unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
-                            const displayValue = unit === "production"
-                              ? entry.amount || ""
-                              : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
-                            return (
-                              <div className="md:col-span-1">
-                                <Label className="text-[10px] md:hidden flex items-baseline gap-1">
-                                  Amount
-                                  <button type="button" className="text-[10px] text-muted-foreground underline decoration-dotted" onClick={() => { const order: AmountUnit[] = ["production", "hours", "days"]; const next = order[(order.indexOf(unit) + 1) % order.length]; setEntryUnits((prev) => ({ ...prev, [entry.id]: next })); }} disabled={isClosed}>{unitLabel}</button>
-                                </Label>
-                                <div className="relative">
-                                  <Input type="number" min="0" step="any" placeholder="0" className="h-8 text-xs" value={displayValue} onChange={(e) => { const raw = parseFloat(e.target.value) || 0; const inProdUnits = toProductionUnits(raw, unit); handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100); }} disabled={isClosed} />
-                                  <button type="button" className="hidden md:block absolute -top-3.5 right-0 text-[9px] text-muted-foreground underline decoration-dotted hover:text-foreground" onClick={() => { const order: AmountUnit[] = ["production", "hours", "days"]; const next = order[(order.indexOf(unit) + 1) % order.length]; setEntryUnits((prev) => ({ ...prev, [entry.id]: next })); }} disabled={isClosed}>{unitLabel}</button>
-                                  {unit !== "production" && entry.amount > 0 && (
-                                    <p className="text-[9px] text-muted-foreground truncate">= {entry.amount.toLocaleString()} {productionUnit}</p>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          <div className="md:col-span-2">
-                            <Label className="text-[10px] md:hidden">Comments</Label>
-                            <Input placeholder="Notes..." className="h-8 text-xs" value={entry.comments ?? ""} onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)} disabled={isClosed} />
-                          </div>
-                          <div className="hidden md:flex md:col-span-1 items-center justify-center">
-                            {!isClosed && (
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteLossEntry(entry.id)}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
+
+                          {/* Comments */}
+                          <Input
+                            placeholder="Notes..."
+                            className="h-7 text-xs flex-1 min-w-0"
+                            value={entry.comments ?? ""}
+                            onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)}
+                            disabled={isClosed}
+                          />
                         </div>
                       </div>
                     );
                   })}
-                  </div>
 
                   {!isClosed && (
-                    <div className="flex justify-center pt-1.5">
+                    <div className="flex justify-center pt-1">
                       <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={handleAddLossEntry}>
                         <Plus className="h-3 w-3 mr-1" />
                         Add another
