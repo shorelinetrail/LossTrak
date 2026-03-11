@@ -1179,7 +1179,7 @@ export default function DailyPage() {
                           <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-4">
                             {index + 1}
                           </span>
-                          <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-1.5">
+                          <div className={cn("flex-1 grid grid-cols-1 gap-1.5", hasDetailCodes ? "md:grid-cols-[1fr_1fr_1fr]" : "md:grid-cols-[1fr_1fr]")}>
                             <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
                               <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
                               <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
