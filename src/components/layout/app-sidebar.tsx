@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ClipboardEdit,
-  History,
   BarChart3,
   CalendarDays,
   CalendarRange,
@@ -32,8 +31,7 @@ interface NavGroup {
 }
 
 const navigation: (NavItem | NavGroup)[] = [
-  { label: "Daily Entry", href: "/daily", icon: ClipboardEdit },
-  { label: "Review", href: "/review", icon: History },
+  { label: "Daily", href: "/daily", icon: ClipboardEdit },
   {
     label: "Reports",
     icon: BarChart3,

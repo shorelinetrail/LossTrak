@@ -9,6 +9,8 @@ import {
   getSubcategories,
   getDetailCodes,
   getDailyLog,
+  getDailyLogs,
+  getAllLossEntries,
   createDailyLog,
   updateDailyLog,
   getLossEntries,
@@ -52,6 +54,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
@@ -61,14 +71,61 @@ import {
   AlertCircle,
   Lock,
   Unlock,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Filter,
+  X,
 } from "lucide-react";
 import { format, parseISO, addDays, subDays, isToday } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LossContextPanel } from "@/components/daily/loss-context-panel";
 
+// ─── Types ───────────────────────────────────────────────────────
+
+interface LogRow extends DailyLog {
+  accounted: number;
+  remaining: number;
+}
+
+type SortColumn =
+  | "date"
+  | "production"
+  | "bar"
+  | "delta"
+  | "accounted"
+  | "remaining"
+  | "status";
+type SortDir = "asc" | "desc";
+type StatusFilter = "all" | "open" | "closed";
+
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function defaultDate(): Date {
+  const now = new Date();
+  // Between midnight and 6 AM, default to yesterday
+  if (now.getHours() < 6) {
+    return subDays(now, 1);
+  }
+  return now;
+}
+
+// ─── Page ────────────────────────────────────────────────────────
+
 export default function DailyPage() {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // ── Log table state ──────────────────────────────────────────
+  const [allLogs, setAllLogs] = useState<LogRow[]>([]);
+  const [allEntriesMap, setAllEntriesMap] = useState<Map<string, number>>(new Map());
+  const [sortCol, setSortCol] = useState<SortColumn>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+
+  // ── Selected-day entry state ─────────────────────────────────
+  // null = table view, Date = entry form for that date
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [bar, setBar] = useState<number>(0);
@@ -78,7 +135,6 @@ export default function DailyPage() {
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
   const [detailCodes, setDetailCodes] = useState<LossDetailCode[]>([]);
 
-  // Per-entry input unit: determines what the user types (stored amount is always in production units)
   type AmountUnit = "production" | "hours" | "days";
   const [entryUnits, setEntryUnits] = useState<Record<string, AmountUnit>>({});
 
@@ -92,15 +148,32 @@ export default function DailyPage() {
   const [saving, setSaving] = useState<boolean>(false);
 
   const dateKey = useMemo(
-    () => format(selectedDate, "yyyy-MM-dd"),
+    () => selectedDate ? format(selectedDate, "yyyy-MM-dd") : "",
     [selectedDate]
   );
-
   const isClosed = dailyLog?.status === "closed";
 
-  // Load config data on mount
+  // ── Load config + all logs on mount ──────────────────────────
+  const loadAllLogs = useCallback(async () => {
+    const [dailyLogs, entries] = await Promise.all([
+      getDailyLogs(),
+      getAllLossEntries(),
+    ]);
+    const byDate = new Map<string, number>();
+    for (const e of entries) {
+      byDate.set(e.date, (byDate.get(e.date) ?? 0) + (e.amount ?? 0));
+    }
+    setAllEntriesMap(byDate);
+    setAllLogs(
+      dailyLogs.map((log) => {
+        const accounted = byDate.get(log.date) ?? 0;
+        return { ...log, accounted, remaining: log.delta - accounted };
+      })
+    );
+  }, []);
+
   useEffect(() => {
-    const loadConfig = async () => {
+    const init = async () => {
       try {
         const [barVal, unit, opHours, cats, subs, codes] = await Promise.all([
           getBarRate(),
@@ -116,16 +189,23 @@ export default function DailyPage() {
         setCategories(cats);
         setSubcategories(subs);
         setDetailCodes(codes);
+        await loadAllLogs();
       } catch (err) {
         console.error("Failed to load config:", err);
         toast.error("Failed to load configuration data.");
       }
     };
-    loadConfig();
-  }, []);
+    init();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load daily log, entries, and recent history when date changes
+  // ── Load selected day when date changes ──────────────────────
   useEffect(() => {
+    if (!dateKey) {
+      setDailyLog(null);
+      setLossEntries([]);
+      setLoading(false);
+      return;
+    }
     const loadDailyData = async () => {
       setLoading(true);
       try {
@@ -141,7 +221,6 @@ export default function DailyPage() {
           setDayComments("");
           setLossEntries([]);
         }
-        // Load recent history (30 days before selected date, panel slices locally)
         const history = await getRecentHistory(dateKey, 30);
         setRecentHistory(history);
       } catch (err) {
@@ -154,9 +233,46 @@ export default function DailyPage() {
     loadDailyData();
   }, [dateKey]);
 
-  // Computed values
+  // ── Sorted + filtered log table ──────────────────────────────
+  const filteredLogs = useMemo(() => {
+    let rows = allLogs;
+    if (statusFilter !== "all") {
+      rows = rows.filter((l) => l.status === statusFilter);
+    }
+    if (filterStartDate) {
+      rows = rows.filter((l) => l.date >= filterStartDate);
+    }
+    if (filterEndDate) {
+      rows = rows.filter((l) => l.date <= filterEndDate);
+    }
+    const dir = sortDir === "asc" ? 1 : -1;
+    rows = [...rows].sort((a, b) => {
+      const av = a[sortCol];
+      const bv = b[sortCol];
+      if (typeof av === "string" && typeof bv === "string")
+        return av.localeCompare(bv) * dir;
+      return ((av as number) - (bv as number)) * dir;
+    });
+    return rows;
+  }, [allLogs, statusFilter, filterStartDate, filterEndDate, sortCol, sortDir]);
+
+  const handleSort = useCallback(
+    (col: SortColumn) => {
+      if (sortCol === col) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortCol(col);
+        setSortDir(col === "date" ? "desc" : "asc");
+      }
+    },
+    [sortCol]
+  );
+
+  const hasFilters = statusFilter !== "all" || filterStartDate || filterEndDate;
+
+  // ── Computed values for selected day ─────────────────────────
   const production = dailyLog?.production ?? 0;
-  const delta = bar - production; // positive = loss day, negative = gain day
+  const delta = bar - production;
   const isGainDay = delta < 0;
   const absDelta = Math.abs(delta);
   const totalAccounted = useMemo(
@@ -166,7 +282,7 @@ export default function DailyPage() {
   const remaining = Math.round((absDelta - totalAccounted) * 100) / 100;
   const isBalanced = Math.abs(remaining) < 0.01;
 
-  // Category colours for allocation bar (stable palette)
+  // Category colours for allocation bar
   const SEGMENT_COLORS = [
     "bg-blue-500",
     "bg-amber-500",
@@ -178,7 +294,6 @@ export default function DailyPage() {
     "bg-pink-500",
   ];
 
-  // Allocation segments grouped by category
   const allocationSegments = useMemo(() => {
     if (absDelta <= 0) return [];
     const byCat = new Map<string, number>();
@@ -187,7 +302,6 @@ export default function DailyPage() {
       byCat.set(e.categoryId, (byCat.get(e.categoryId) ?? 0) + e.amount);
     }
     const segments: { categoryId: string; name: string; amount: number; pct: number; color: string }[] = [];
-    // Use category display order for consistent ordering
     const ordered = categories.filter((c) => byCat.has(c.id));
     ordered.forEach((cat, i) => {
       const amount = byCat.get(cat.id) ?? 0;
@@ -200,12 +314,12 @@ export default function DailyPage() {
       });
     });
     return segments;
-  }, [lossEntries, categories, absDelta]);
+  }, [lossEntries, categories, absDelta]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const accountedPct = absDelta > 0 ? Math.min((totalAccounted / absDelta) * 100, 100) : 0;
   const remainingPct = Math.max(0, 100 - accountedPct);
 
-  // Unit conversion: production units ↔ hours ↔ days
+  // Unit conversion
   const hourlyRate = operatingHours > 0 ? bar / operatingHours : 0;
   const toProductionUnits = useCallback(
     (value: number, unit: AmountUnit): number => {
@@ -224,7 +338,17 @@ export default function DailyPage() {
     [hourlyRate, bar]
   );
 
-  // Start accounting for a new day
+  // ── Refresh log table after mutations ────────────────────────
+  const refreshLogTable = useCallback(async () => {
+    try {
+      await loadAllLogs();
+    } catch {
+      // best-effort
+    }
+  }, [loadAllLogs]);
+
+  // ── Handlers ─────────────────────────────────────────────────
+
   const handleStartAccounting = useCallback(async () => {
     const prod = parseFloat(productionInput);
     if (isNaN(prod) || prod < 0) {
@@ -243,15 +367,15 @@ export default function DailyPage() {
       setDailyLog(log);
       setLossEntries([]);
       toast.success("Daily log created. Start adding loss entries.");
+      await refreshLogTable();
     } catch (err) {
       console.error("Failed to create daily log:", err);
       toast.error("Failed to create daily log.");
     } finally {
       setSaving(false);
     }
-  }, [productionInput, dateKey, bar]);
+  }, [productionInput, dateKey, bar, refreshLogTable]);
 
-  // Update production total
   const handleUpdateProduction = useCallback(
     async (value: string) => {
       setProductionInput(value);
@@ -260,15 +384,15 @@ export default function DailyPage() {
       try {
         const updated = await updateDailyLog(dateKey, { production: prod });
         setDailyLog(updated);
+        await refreshLogTable();
       } catch (err) {
         console.error("Failed to update production:", err);
         toast.error("Failed to update production.");
       }
     },
-    [dailyLog, dateKey]
+    [dailyLog, dateKey, refreshLogTable]
   );
 
-  // Update day comments
   const handleDayCommentsChange = useCallback(
     async (value: string) => {
       setDayComments(value);
@@ -276,13 +400,12 @@ export default function DailyPage() {
       try {
         await updateDailyLog(dateKey, { comments: value });
       } catch {
-        // Silently handle - auto-save
+        // auto-save
       }
     },
     [dailyLog, dateKey]
   );
 
-  // Add a new loss entry
   const handleAddLossEntry = useCallback(async () => {
     if (!dailyLog) return;
     try {
@@ -297,26 +420,24 @@ export default function DailyPage() {
         comments: "",
       });
       setLossEntries((prev) => [...prev, entry]);
+      await refreshLogTable();
     } catch (err) {
       console.error("Failed to add loss entry:", err);
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to add loss entry: ${msg}`);
     }
-  }, [dailyLog, dateKey]);
+  }, [dailyLog, dateKey, refreshLogTable]);
 
-  // Update a loss entry field
   const handleUpdateLossEntry = useCallback(
     async (entryId: string, field: string, value: string | number) => {
       setLossEntries((prev) =>
         prev.map((e) => {
           if (e.id !== entryId) return e;
           const updated = { ...e, [field]: value };
-          // Reset subcategory and detail code when category changes
           if (field === "categoryId") {
             updated.subcategoryId = "";
             updated.detailCodeId = "";
           }
-          // Reset detail code when subcategory changes
           if (field === "subcategoryId") {
             updated.detailCodeId = "";
           }
@@ -333,27 +454,30 @@ export default function DailyPage() {
           updateData.detailCodeId = "";
         }
         await updateLossEntry(entryId, updateData);
+        if (field === "amount") await refreshLogTable();
       } catch (err) {
         console.error("Failed to save loss entry:", err);
         toast.error("Failed to save loss entry.");
       }
     },
-    []
+    [refreshLogTable]
   );
 
-  // Delete a loss entry
-  const handleDeleteLossEntry = useCallback(async (entryId: string) => {
-    try {
-      await deleteLossEntry(entryId);
-      setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
-      toast.success("Loss entry removed.");
-    } catch (err) {
-      console.error("Failed to delete loss entry:", err);
-      toast.error("Failed to delete loss entry.");
-    }
-  }, []);
+  const handleDeleteLossEntry = useCallback(
+    async (entryId: string) => {
+      try {
+        await deleteLossEntry(entryId);
+        setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
+        toast.success("Loss entry removed.");
+        await refreshLogTable();
+      } catch (err) {
+        console.error("Failed to delete loss entry:", err);
+        toast.error("Failed to delete loss entry.");
+      }
+    },
+    [refreshLogTable]
+  );
 
-  // Close the day
   const handleCloseDay = useCallback(async () => {
     if (!dailyLog || !isBalanced) return;
     try {
@@ -364,15 +488,15 @@ export default function DailyPage() {
       });
       setDailyLog(updated);
       toast.success("Day closed successfully.");
+      await refreshLogTable();
     } catch (err) {
       console.error("Failed to close day:", err);
       toast.error("Failed to close day.");
     } finally {
       setSaving(false);
     }
-  }, [dailyLog, isBalanced, dateKey, dayComments]);
+  }, [dailyLog, isBalanced, dateKey, dayComments, refreshLogTable]);
 
-  // Reopen a closed day for editing
   const handleReopenDay = useCallback(async () => {
     if (!dailyLog || dailyLog.status !== "closed") return;
     try {
@@ -380,15 +504,15 @@ export default function DailyPage() {
       const updated = await updateDailyLog(dateKey, { status: "open" });
       setDailyLog(updated);
       toast.success("Day reopened for editing.");
+      await refreshLogTable();
     } catch (err) {
       console.error("Failed to reopen day:", err);
       toast.error("Failed to reopen day.");
     } finally {
       setSaving(false);
     }
-  }, [dailyLog, dateKey]);
+  }, [dailyLog, dateKey, refreshLogTable]);
 
-  // Carry forward entries from a previous day
   const handleCarryForward = useCallback(
     async (previousEntries: LossEntry[], withAmounts = false) => {
       if (!dailyLog || isClosed) return;
@@ -415,15 +539,15 @@ export default function DailyPage() {
             ? `Copied ${count} ${label} with amounts.`
             : `Carried forward ${count} ${label}. Adjust amounts for today.`
         );
+        await refreshLogTable();
       } catch (err) {
         console.error("Failed to carry forward entries:", err);
         toast.error("Failed to carry forward entries.");
       }
     },
-    [dailyLog, isClosed, dateKey]
+    [dailyLog, isClosed, dateKey, refreshLogTable]
   );
 
-  // Get subcategories for a given category
   const getSubcategoriesForCategory = useCallback(
     (categoryId: string): LossSubcategory[] => {
       return subcategories.filter((s) => s.categoryId === categoryId);
@@ -431,7 +555,6 @@ export default function DailyPage() {
     [subcategories]
   );
 
-  // Get detail codes for a given subcategory
   const getDetailCodesForSubcategory = useCallback(
     (subcategoryId: string): LossDetailCode[] => {
       return detailCodes.filter((d) => d.subcategoryId === subcategoryId);
@@ -439,7 +562,6 @@ export default function DailyPage() {
     [detailCodes]
   );
 
-  // Get allowed loss types for a category
   const getAllowedLossTypes = useCallback(
     (categoryId: string): LossType[] => {
       const category = categories.find((c) => c.id === categoryId);
@@ -449,7 +571,6 @@ export default function DailyPage() {
     [categories]
   );
 
-  // Handle date selection
   const handleDateSelect = useCallback((date: Date | undefined) => {
     if (date) {
       setSelectedDate(date);
@@ -457,28 +578,242 @@ export default function DailyPage() {
     }
   }, []);
 
-  if (loading) {
+  const handleBackToTable = useCallback(() => {
+    setSelectedDate(null);
+    refreshLogTable();
+  }, [refreshLogTable]);
+
+  const handleOpenDate = useCallback((date: Date) => {
+    setSelectedDate(date);
+  }, []);
+
+  // ── Sort icon helper ─────────────────────────────────────────
+  const SortIcon = ({ col }: { col: SortColumn }) => {
+    if (sortCol !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
+    return sortDir === "asc" ? (
+      <ArrowUp className="h-3 w-3 ml-1" />
+    ) : (
+      <ArrowDown className="h-3 w-3 ml-1" />
+    );
+  };
+
+  // ─── Render ──────────────────────────────────────────────────
+
+  // Table view (no date selected)
+  if (!selectedDate) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-muted-foreground text-lg">Loading...</div>
+      <div className="container mx-auto max-w-5xl py-3 px-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold tracking-tight">
+            Daily Loss Accounting
+          </h1>
+          <div className="flex items-center gap-1.5">
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs">
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Day
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  onSelect={(date) => {
+                    if (date) {
+                      setSelectedDate(date);
+                      setCalendarOpen(false);
+                    }
+                  }}
+                  initialFocus
+                />
+              </PopoverContent>
+            </Popover>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setSelectedDate(defaultDate())}
+            >
+              {new Date().getHours() < 6 ? "Yesterday" : "Today"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <Card>
+          <CardContent className="px-3 py-2">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+              <Select
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as StatusFilter)}
+              >
+                <SelectTrigger className="h-7 text-xs w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+              <input
+                type="date"
+                value={filterStartDate}
+                onChange={(e) => setFilterStartDate(e.target.value)}
+                className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
+              />
+              <span className="text-xs text-muted-foreground">to</span>
+              <input
+                type="date"
+                value={filterEndDate}
+                onChange={(e) => setFilterEndDate(e.target.value)}
+                className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
+              />
+              {hasFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={() => {
+                    setStatusFilter("all");
+                    setFilterStartDate("");
+                    setFilterEndDate("");
+                  }}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
+              )}
+              <span className="ml-auto text-[10px] text-muted-foreground">
+                {filteredLogs.length} of {allLogs.length} day{allLogs.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {/* Table */}
+            {filteredLogs.length === 0 ? (
+              <div className="text-center py-6 text-sm text-muted-foreground">
+                {allLogs.length === 0
+                  ? "No daily logs yet. Click \"Today\" or \"New Day\" to begin."
+                  : "No logs match the current filters."}
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {(
+                        [
+                          ["date", "Date", "text-left"],
+                          ["production", "Production", "text-right"],
+                          ["bar", "BAR", "text-right"],
+                          ["delta", "Delta", "text-right"],
+                          ["accounted", "Accounted", "text-right"],
+                          ["remaining", "Remaining", "text-right"],
+                          ["status", "Status", "text-center"],
+                        ] as [SortColumn, string, string][]
+                      ).map(([col, label, align]) => (
+                        <TableHead
+                          key={col}
+                          className={cn(
+                            "text-[10px] h-8 cursor-pointer select-none hover:text-foreground",
+                            align
+                          )}
+                          onClick={() => handleSort(col)}
+                        >
+                          <span className="inline-flex items-center">
+                            {label}
+                            <SortIcon col={col} />
+                          </span>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLogs.map((log) => (
+                      <TableRow
+                        key={log.date}
+                        className="cursor-pointer"
+                        onClick={() => handleOpenDate(parseISO(log.date))}
+                      >
+                        <TableCell className="text-xs py-1.5 font-medium">
+                          {format(parseISO(log.date), "EEE, MMM d, yyyy")}
+                        </TableCell>
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
+                          {log.production.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
+                          {log.bar.toLocaleString()}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs py-1.5 text-right tabular-nums",
+                            log.delta > 0
+                              ? "text-orange-600"
+                              : log.delta < 0
+                                ? "text-green-600"
+                                : "text-muted-foreground"
+                          )}
+                        >
+                          {log.delta.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-xs py-1.5 text-right tabular-nums">
+                          {log.accounted.toLocaleString()}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-xs py-1.5 text-right tabular-nums",
+                            log.remaining > 0.01
+                              ? "text-yellow-600"
+                              : log.remaining < -0.01
+                                ? "text-red-600"
+                                : "text-green-600"
+                          )}
+                        >
+                          {log.remaining.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-xs py-1.5 text-center">
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-[10px] px-1.5 py-0",
+                              log.status === "closed"
+                                ? "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-400"
+                                : "bg-yellow-100 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-400"
+                            )}
+                          >
+                            {log.status === "closed" ? "Closed" : "Open"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
+  // Entry form view (date selected)
   return (
     <div className="container mx-auto max-w-5xl py-3 px-4 space-y-2">
-      {/* Header with Date Picker */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <h1 className="text-lg font-semibold tracking-tight">
-          Daily Loss Accounting
-        </h1>
+      {/* Header with back + date nav */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs px-2"
+            onClick={handleBackToTable}
+          >
+            <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+            All Days
+          </Button>
+        </div>
         <div className="flex items-center gap-1">
-          {isClosed && (
-            <Badge variant="secondary" className="gap-1 mr-1">
-              <Lock className="h-3 w-3" />
-              Closed
-            </Badge>
-          )}
           <Button
             variant="ghost"
             size="icon"
@@ -526,8 +861,8 @@ export default function DailyPage() {
         </div>
       </div>
 
-      {/* No daily log yet - show initial form */}
-      {!dailyLog && (
+      {/* No daily log yet */}
+      {!loading && !dailyLog && (
         <Card>
           <CardContent className="space-y-2">
             <p className="text-sm text-muted-foreground">
@@ -571,172 +906,169 @@ export default function DailyPage() {
         </Card>
       )}
 
-      {/* Daily log exists - show full interface */}
+      {/* Daily log exists */}
       {dailyLog && (
         <>
-          {/* KPI Summary Cards - sticky so always visible */}
+          {/* KPI Summary Cards - sticky */}
           <div className="sticky top-0 z-10 bg-background pt-1 pb-1 -mt-1 -mx-4 px-4 border-b border-transparent [&:not(:first-child)]:border-border/50">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-            <Card>
-              <CardContent className="px-3">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Production
-                </p>
-                <p className="text-xl font-bold mt-0.5">
-                  {production.toLocaleString()}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="px-3">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  BAR
-                </p>
-                <p className="text-xl font-bold mt-0.5">
-                  {bar.toLocaleString()}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="px-3">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  {isGainDay ? "Gain" : "Delta"}
-                </p>
-                <p
-                  className={cn(
-                    "text-xl font-bold mt-0.5",
-                    isGainDay ? "text-green-600" : "text-orange-600"
-                  )}
-                >
-                  {isGainDay ? "+" : ""}
-                  {absDelta.toLocaleString()}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="px-3">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Accounted
-                </p>
-                <p className="text-xl font-bold mt-0.5">
-                  {totalAccounted.toLocaleString()}
-                </p>
-                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
-              </CardContent>
-            </Card>
-            <Card
-              className={cn(
-                "col-span-2 md:col-span-1",
-                isBalanced
-                  ? "border-green-500 bg-green-50 dark:bg-green-950/20"
-                  : "border-red-500 bg-red-50 dark:bg-red-950/20"
-              )}
-            >
-              <CardContent className="px-3">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Remaining
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  {isBalanced ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-red-600" />
-                  )}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <Card>
+                <CardContent className="px-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Production
+                  </p>
+                  <p className="text-xl font-bold mt-0.5">
+                    {production.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="px-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    BAR
+                  </p>
+                  <p className="text-xl font-bold mt-0.5">
+                    {bar.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="px-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    {isGainDay ? "Gain" : "Delta"}
+                  </p>
                   <p
                     className={cn(
-                      "text-xl font-bold",
-                      isBalanced ? "text-green-600" : "text-red-600"
+                      "text-xl font-bold mt-0.5",
+                      isGainDay ? "text-green-600" : "text-orange-600"
                     )}
                   >
-                    {remaining.toLocaleString()}
+                    {isGainDay ? "+" : ""}
+                    {absDelta.toLocaleString()}
                   </p>
-                </div>
-                <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
-              </CardContent>
-            </Card>
-          </div>
+                  <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="px-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Accounted
+                  </p>
+                  <p className="text-xl font-bold mt-0.5">
+                    {totalAccounted.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
+                </CardContent>
+              </Card>
+              <Card
+                className={cn(
+                  "col-span-2 md:col-span-1",
+                  isBalanced
+                    ? "border-green-500 bg-green-50 dark:bg-green-950/20"
+                    : "border-red-500 bg-red-50 dark:bg-red-950/20"
+                )}
+              >
+                <CardContent className="px-3">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Remaining
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {isBalanced ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                    )}
+                    <p
+                      className={cn(
+                        "text-xl font-bold",
+                        isBalanced ? "text-green-600" : "text-red-600"
+                      )}
+                    >
+                      {remaining.toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{productionUnit}</p>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Loss Allocation Bar */}
-          {absDelta > 0 && (
-            <TooltipProvider>
-              <div className="mt-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                    Allocation
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {accountedPct.toFixed(0)}% accounted
-                  </span>
-                </div>
-                <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden flex">
-                  {allocationSegments.map((seg) => (
-                    <Tooltip key={seg.categoryId}>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={cn(
-                            seg.color,
-                            "h-full transition-all duration-300 ease-out cursor-default",
-                            seg.pct < 3 && "min-w-[3px]"
-                          )}
-                          style={{ width: `${seg.pct}%` }}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        <p className="font-medium">{seg.name}</p>
-                        <p>{seg.amount.toLocaleString()} {productionUnit} ({seg.pct.toFixed(1)}%)</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
-                  {remainingPct > 0 && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div
-                          className={cn(
-                            "h-full transition-all duration-300 ease-out cursor-default",
-                            isBalanced
-                              ? "bg-transparent"
-                              : "bg-muted-foreground/15"
-                          )}
-                          style={{ width: `${remainingPct}%` }}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">
-                        <p className="font-medium">Unaccounted</p>
-                        <p>{Math.abs(remaining).toLocaleString()} {productionUnit} ({remainingPct.toFixed(1)}%)</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-                {/* Legend */}
-                {allocationSegments.length > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+            {/* Loss Allocation Bar */}
+            {absDelta > 0 && (
+              <TooltipProvider>
+                <div className="mt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                      Allocation
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {accountedPct.toFixed(0)}% accounted
+                    </span>
+                  </div>
+                  <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden flex">
                     {allocationSegments.map((seg) => (
-                      <div key={seg.categoryId} className="flex items-center gap-1">
-                        <div className={cn("h-2 w-2 rounded-full", seg.color)} />
-                        <span className="text-[10px] text-muted-foreground">
-                          {seg.name}
-                        </span>
-                      </div>
+                      <Tooltip key={seg.categoryId}>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              seg.color,
+                              "h-full transition-all duration-300 ease-out cursor-default",
+                              seg.pct < 3 && "min-w-[3px]"
+                            )}
+                            style={{ width: `${seg.pct}%` }}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="font-medium">{seg.name}</p>
+                          <p>{seg.amount.toLocaleString()} {productionUnit} ({seg.pct.toFixed(1)}%)</p>
+                        </TooltipContent>
+                      </Tooltip>
                     ))}
-                    {remainingPct > 0.5 && (
-                      <div className="flex items-center gap-1">
-                        <div className="h-2 w-2 rounded-full bg-muted-foreground/15 border border-muted-foreground/30" />
-                        <span className="text-[10px] text-muted-foreground">
-                          Unaccounted
-                        </span>
-                      </div>
+                    {remainingPct > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div
+                            className={cn(
+                              "h-full transition-all duration-300 ease-out cursor-default",
+                              isBalanced ? "bg-transparent" : "bg-muted-foreground/15"
+                            )}
+                            style={{ width: `${remainingPct}%` }}
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          <p className="font-medium">Unaccounted</p>
+                          <p>{Math.abs(remaining).toLocaleString()} {productionUnit} ({remainingPct.toFixed(1)}%)</p>
+                        </TooltipContent>
+                      </Tooltip>
                     )}
                   </div>
-                )}
-              </div>
-            </TooltipProvider>
-          )}
+                  {allocationSegments.length > 0 && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                      {allocationSegments.map((seg) => (
+                        <div key={seg.categoryId} className="flex items-center gap-1">
+                          <div className={cn("h-2 w-2 rounded-full", seg.color)} />
+                          <span className="text-[10px] text-muted-foreground">
+                            {seg.name}
+                          </span>
+                        </div>
+                      ))}
+                      {remainingPct > 0.5 && (
+                        <div className="flex items-center gap-1">
+                          <div className="h-2 w-2 rounded-full bg-muted-foreground/15 border border-muted-foreground/30" />
+                          <span className="text-[10px] text-muted-foreground">
+                            Unaccounted
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TooltipProvider>
+            )}
           </div>
 
-          {/* Loss Context Panel - recent history for reference */}
+          {/* Loss Context Panel */}
           <LossContextPanel
             history={recentHistory}
             categories={categories}
@@ -747,7 +1079,7 @@ export default function DailyPage() {
             disabled={isClosed || !dailyLog}
           />
 
-          {/* Production Edit (when not closed) */}
+          {/* Production Edit */}
           {!isClosed && (
             <div className="flex items-center gap-2">
               <Label htmlFor="production-edit" className="text-xs text-muted-foreground whitespace-nowrap">
@@ -799,12 +1131,12 @@ export default function DailyPage() {
 
               {lossEntries.length > 0 && (
                 <div>
-                  {/* Column headers (desktop) */}
-                  <div className="hidden md:grid md:grid-cols-12 gap-1.5 mb-1">
+                  {/* Desktop header row */}
+                  <div className="hidden md:grid md:grid-cols-12 gap-1.5 mb-1 px-0.5">
                     <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Category</span>
                     <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Subcategory</span>
                     <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Detail Code</span>
-                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Loss Type</span>
+                    <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Type</span>
                     <span className="col-span-1 text-[10px] font-medium text-muted-foreground uppercase">Amount</span>
                     <span className="col-span-2 text-[10px] font-medium text-muted-foreground uppercase">Comments</span>
                     <span className="col-span-1"></span>
@@ -812,9 +1144,7 @@ export default function DailyPage() {
 
                   <div className="space-y-1.5">
                   {lossEntries.map((entry, index) => {
-                    const filteredSubcategories = getSubcategoriesForCategory(
-                      entry.categoryId
-                    );
+                    const filteredSubcategories = getSubcategoriesForCategory(entry.categoryId);
                     const filteredDetailCodes = entry.subcategoryId
                       ? getDetailCodesForSubcategory(entry.subcategoryId)
                       : [];
@@ -825,224 +1155,84 @@ export default function DailyPage() {
                       <div
                         key={entry.id}
                         className={cn(
-                          "rounded border border-border/50 p-1.5 md:p-0 md:border-0",
-                          index > 0 && "md:border-t md:border-border/30 md:pt-1.5 md:rounded-none",
+                          "py-1.5 px-0.5",
+                          index > 0 && "border-t border-border/40",
                           isClosed && "opacity-80"
                         )}
                       >
-                        {/* Mobile entry label */}
                         <div className="md:hidden flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            #{index + 1}
-                          </span>
+                          <span className="text-[10px] font-medium text-muted-foreground">#{index + 1}</span>
                           {!isClosed && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 text-destructive hover:text-destructive"
-                              onClick={() => handleDeleteLossEntry(entry.id)}
-                            >
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive hover:text-destructive" onClick={() => handleDeleteLossEntry(entry.id)}>
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-1.5">
-                          {/* Category */}
                           <div className="md:col-span-2">
                             <Label className="text-[10px] md:hidden">Category</Label>
-                            <Select
-                              value={entry.categoryId}
-                              onValueChange={(v) =>
-                                handleUpdateLossEntry(entry.id, "categoryId", v)
-                              }
-                              disabled={isClosed}
-                            >
-                              <SelectTrigger className="h-8 text-xs w-full">
-                                <SelectValue placeholder="Category" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {categories.map((cat) => (
-                                  <SelectItem key={cat.id} value={cat.id}>
-                                    {cat.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                            <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
+                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Category" /></SelectTrigger>
+                              <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
                             </Select>
                           </div>
-
-                          {/* Subcategory */}
                           <div className="md:col-span-2">
                             <Label className="text-[10px] md:hidden">Subcategory</Label>
-                            <Select
-                              value={entry.subcategoryId}
-                              onValueChange={(v) =>
-                                handleUpdateLossEntry(entry.id, "subcategoryId", v)
-                              }
-                              disabled={isClosed || !entry.categoryId}
-                            >
-                              <SelectTrigger className="h-8 text-xs w-full">
-                                <SelectValue placeholder="Subcategory" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {filteredSubcategories.map((sub) => (
-                                  <SelectItem key={sub.id} value={sub.id}>
-                                    {sub.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                            <Select value={entry.subcategoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)} disabled={isClosed || !entry.categoryId}>
+                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Subcategory" /></SelectTrigger>
+                              <SelectContent>{filteredSubcategories.map((sub) => (<SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>))}</SelectContent>
                             </Select>
                           </div>
-
-                          {/* Detail Code */}
                           <div className="md:col-span-2">
                             {hasDetailCodes ? (
                               <>
                                 <Label className="text-[10px] md:hidden">Detail Code</Label>
-                                <Select
-                                  value={entry.detailCodeId || ""}
-                                  onValueChange={(v) =>
-                                    handleUpdateLossEntry(entry.id, "detailCodeId", v)
-                                  }
-                                  disabled={isClosed}
-                                >
-                                  <SelectTrigger className="h-8 text-xs w-full">
-                                    <SelectValue placeholder="Optional" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {filteredDetailCodes.map((dc) => (
-                                      <SelectItem key={dc.id} value={dc.id}>
-                                        {dc.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
+                                <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
+                                  <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Optional" /></SelectTrigger>
+                                  <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
                                 </Select>
                               </>
                             ) : (
                               <div className="hidden md:block" />
                             )}
                           </div>
-
-                          {/* Loss Type */}
                           <div className="md:col-span-2">
                             <Label className="text-[10px] md:hidden">Loss Type</Label>
-                            <Select
-                              value={entry.lossType}
-                              onValueChange={(v) =>
-                                handleUpdateLossEntry(entry.id, "lossType", v)
-                              }
-                              disabled={isClosed}
-                            >
-                              <SelectTrigger className="h-8 text-xs w-full">
-                                <SelectValue placeholder="Type" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allowedTypes.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                            <Select value={entry.lossType} onValueChange={(v) => handleUpdateLossEntry(entry.id, "lossType", v)} disabled={isClosed}>
+                              <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Type" /></SelectTrigger>
+                              <SelectContent>{allowedTypes.map((type) => (<SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>))}</SelectContent>
                             </Select>
                           </div>
-
-                          {/* Amount with unit conversion */}
                           {(() => {
                             const unit = entryUnits[entry.id] || "production";
-                            const unitLabel =
-                              unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
-                            const displayValue =
-                              unit === "production"
-                                ? entry.amount || ""
-                                : entry.amount
-                                  ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4))
-                                  : "";
+                            const unitLabel = unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
+                            const displayValue = unit === "production"
+                              ? entry.amount || ""
+                              : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
                             return (
                               <div className="md:col-span-1">
                                 <Label className="text-[10px] md:hidden flex items-baseline gap-1">
                                   Amount
-                                  <button
-                                    type="button"
-                                    className="text-[10px] text-muted-foreground underline decoration-dotted"
-                                    onClick={() => {
-                                      const order: AmountUnit[] = ["production", "hours", "days"];
-                                      const next = order[(order.indexOf(unit) + 1) % order.length];
-                                      setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
-                                    }}
-                                    disabled={isClosed}
-                                  >
-                                    {unitLabel}
-                                  </button>
+                                  <button type="button" className="text-[10px] text-muted-foreground underline decoration-dotted" onClick={() => { const order: AmountUnit[] = ["production", "hours", "days"]; const next = order[(order.indexOf(unit) + 1) % order.length]; setEntryUnits((prev) => ({ ...prev, [entry.id]: next })); }} disabled={isClosed}>{unitLabel}</button>
                                 </Label>
                                 <div className="relative">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    step="any"
-                                    placeholder="0"
-                                    className="h-8 text-xs"
-                                    value={displayValue}
-                                    onChange={(e) => {
-                                      const raw = parseFloat(e.target.value) || 0;
-                                      const inProdUnits = toProductionUnits(raw, unit);
-                                      handleUpdateLossEntry(
-                                        entry.id,
-                                        "amount",
-                                        Math.round(inProdUnits * 100) / 100
-                                      );
-                                    }}
-                                    disabled={isClosed}
-                                  />
-                                  {/* Desktop unit toggle */}
-                                  <button
-                                    type="button"
-                                    className="hidden md:block absolute -top-3.5 right-0 text-[9px] text-muted-foreground underline decoration-dotted hover:text-foreground"
-                                    onClick={() => {
-                                      const order: AmountUnit[] = ["production", "hours", "days"];
-                                      const next = order[(order.indexOf(unit) + 1) % order.length];
-                                      setEntryUnits((prev) => ({ ...prev, [entry.id]: next }));
-                                    }}
-                                    disabled={isClosed}
-                                  >
-                                    {unitLabel}
-                                  </button>
+                                  <Input type="number" min="0" step="any" placeholder="0" className="h-8 text-xs" value={displayValue} onChange={(e) => { const raw = parseFloat(e.target.value) || 0; const inProdUnits = toProductionUnits(raw, unit); handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100); }} disabled={isClosed} />
+                                  <button type="button" className="hidden md:block absolute -top-3.5 right-0 text-[9px] text-muted-foreground underline decoration-dotted hover:text-foreground" onClick={() => { const order: AmountUnit[] = ["production", "hours", "days"]; const next = order[(order.indexOf(unit) + 1) % order.length]; setEntryUnits((prev) => ({ ...prev, [entry.id]: next })); }} disabled={isClosed}>{unitLabel}</button>
+                                  {unit !== "production" && entry.amount > 0 && (
+                                    <p className="text-[9px] text-muted-foreground truncate">= {entry.amount.toLocaleString()} {productionUnit}</p>
+                                  )}
                                 </div>
-                                {unit !== "production" && entry.amount > 0 && (
-                                  <p className="text-[9px] text-muted-foreground truncate">
-                                    = {entry.amount.toLocaleString()} {productionUnit}
-                                  </p>
-                                )}
                               </div>
                             );
                           })()}
-
-                          {/* Comments */}
                           <div className="md:col-span-2">
                             <Label className="text-[10px] md:hidden">Comments</Label>
-                            <Input
-                              placeholder="Notes..."
-                              className="h-8 text-xs"
-                              value={entry.comments ?? ""}
-                              onChange={(e) =>
-                                handleUpdateLossEntry(
-                                  entry.id,
-                                  "comments",
-                                  e.target.value
-                                )
-                              }
-                              disabled={isClosed}
-                            />
+                            <Input placeholder="Notes..." className="h-8 text-xs" value={entry.comments ?? ""} onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)} disabled={isClosed} />
                           </div>
-
-                          {/* Delete button (desktop) */}
                           <div className="hidden md:flex md:col-span-1 items-center justify-center">
                             {!isClosed && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteLossEntry(entry.id)}
-                              >
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteLossEntry(entry.id)}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             )}
@@ -1055,12 +1245,7 @@ export default function DailyPage() {
 
                   {!isClosed && (
                     <div className="flex justify-center pt-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-xs text-muted-foreground"
-                        onClick={handleAddLossEntry}
-                      >
+                      <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground" onClick={handleAddLossEntry}>
                         <Plus className="h-3 w-3 mr-1" />
                         Add another
                       </Button>
@@ -1096,11 +1281,7 @@ export default function DailyPage() {
                     size="sm"
                     onClick={handleCloseDay}
                     disabled={!isBalanced || saving}
-                    className={cn(
-                      "h-7 text-xs",
-                      isBalanced &&
-                        "bg-green-600 hover:bg-green-700 text-white"
-                    )}
+                    className={cn("h-7 text-xs", isBalanced && "bg-green-600 hover:bg-green-700 text-white")}
                   >
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     Close Day
@@ -1117,17 +1298,9 @@ export default function DailyPage() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Lock className="h-4 w-4" />
-                    <p className="text-sm font-medium">
-                      Day closed — read-only.
-                    </p>
+                    <p className="text-sm font-medium">Day closed — read-only.</p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs"
-                    onClick={handleReopenDay}
-                    disabled={saving}
-                  >
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleReopenDay} disabled={saving}>
                     <Unlock className="h-3.5 w-3.5 mr-1" />
                     Reopen
                   </Button>
