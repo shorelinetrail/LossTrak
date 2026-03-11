@@ -46,6 +46,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   CalendarIcon,
   ChevronLeft,
   ChevronRight,
@@ -159,6 +165,45 @@ export default function DailyPage() {
   );
   const remaining = Math.round((absDelta - totalAccounted) * 100) / 100;
   const isBalanced = Math.abs(remaining) < 0.01;
+
+  // Category colours for allocation bar (stable palette)
+  const SEGMENT_COLORS = [
+    "bg-blue-500",
+    "bg-amber-500",
+    "bg-rose-500",
+    "bg-emerald-500",
+    "bg-violet-500",
+    "bg-cyan-500",
+    "bg-orange-500",
+    "bg-pink-500",
+  ];
+
+  // Allocation segments grouped by category
+  const allocationSegments = useMemo(() => {
+    if (absDelta <= 0) return [];
+    const byCat = new Map<string, number>();
+    for (const e of lossEntries) {
+      if (!e.categoryId || e.amount <= 0) continue;
+      byCat.set(e.categoryId, (byCat.get(e.categoryId) ?? 0) + e.amount);
+    }
+    const segments: { categoryId: string; name: string; amount: number; pct: number; color: string }[] = [];
+    // Use category display order for consistent ordering
+    const ordered = categories.filter((c) => byCat.has(c.id));
+    ordered.forEach((cat, i) => {
+      const amount = byCat.get(cat.id) ?? 0;
+      segments.push({
+        categoryId: cat.id,
+        name: cat.name,
+        amount,
+        pct: (amount / absDelta) * 100,
+        color: SEGMENT_COLORS[i % SEGMENT_COLORS.length],
+      });
+    });
+    return segments;
+  }, [lossEntries, categories, absDelta]);
+
+  const accountedPct = absDelta > 0 ? Math.min((totalAccounted / absDelta) * 100, 100) : 0;
+  const remainingPct = Math.max(0, 100 - accountedPct);
 
   // Unit conversion: production units ↔ hours ↔ days
   const hourlyRate = operatingHours > 0 ? bar / operatingHours : 0;
@@ -613,6 +658,82 @@ export default function DailyPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Loss Allocation Bar */}
+          {absDelta > 0 && (
+            <TooltipProvider>
+              <div className="mt-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    Allocation
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {accountedPct.toFixed(0)}% accounted
+                  </span>
+                </div>
+                <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden flex">
+                  {allocationSegments.map((seg) => (
+                    <Tooltip key={seg.categoryId}>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            seg.color,
+                            "h-full transition-all duration-300 ease-out cursor-default",
+                            seg.pct < 3 && "min-w-[3px]"
+                          )}
+                          style={{ width: `${seg.pct}%` }}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="font-medium">{seg.name}</p>
+                        <p>{seg.amount.toLocaleString()} {productionUnit} ({seg.pct.toFixed(1)}%)</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                  {remainingPct > 0 && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            "h-full transition-all duration-300 ease-out cursor-default",
+                            isBalanced
+                              ? "bg-transparent"
+                              : "bg-muted-foreground/15"
+                          )}
+                          style={{ width: `${remainingPct}%` }}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="font-medium">Unaccounted</p>
+                        <p>{Math.abs(remaining).toLocaleString()} {productionUnit} ({remainingPct.toFixed(1)}%)</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                {/* Legend */}
+                {allocationSegments.length > 0 && (
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
+                    {allocationSegments.map((seg) => (
+                      <div key={seg.categoryId} className="flex items-center gap-1">
+                        <div className={cn("h-2 w-2 rounded-full", seg.color)} />
+                        <span className="text-[10px] text-muted-foreground">
+                          {seg.name}
+                        </span>
+                      </div>
+                    ))}
+                    {remainingPct > 0.5 && (
+                      <div className="flex items-center gap-1">
+                        <div className="h-2 w-2 rounded-full bg-muted-foreground/15 border border-muted-foreground/30" />
+                        <span className="text-[10px] text-muted-foreground">
+                          Unaccounted
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TooltipProvider>
+          )}
           </div>
 
           {/* Loss Context Panel - recent history for reference */}
