@@ -692,22 +692,26 @@ export async function createLossEntry(
 ): Promise<LossEntry> {
   const client = sb();
   if (client) {
-    const { data: row, error } = await client
+    const row: Record<string, unknown> = {
+      daily_log_id: data.dailyLogId,
+      loss_type: data.lossType,
+      amount: data.amount,
+      comments: data.comments,
+    };
+    // Only include FK / date columns when they have a value (avoids NOT NULL violations
+    // if migration 003 hasn't been applied yet)
+    if (data.date) row.date = data.date;
+    if (data.categoryId) row.category_id = data.categoryId;
+    if (data.subcategoryId) row.subcategory_id = data.subcategoryId;
+    if (data.detailCodeId) row.detail_code_id = data.detailCodeId;
+
+    const { data: inserted, error } = await client
       .from("loss_entries")
-      .insert({
-        daily_log_id: data.dailyLogId,
-        date: emptyToNull(data.date),
-        category_id: emptyToNull(data.categoryId),
-        subcategory_id: emptyToNull(data.subcategoryId),
-        detail_code_id: emptyToNull(data.detailCodeId),
-        loss_type: data.lossType,
-        amount: data.amount,
-        comments: data.comments,
-      })
+      .insert(row)
       .select()
       .single();
     if (error) throw error;
-    return toEntry(row);
+    return toEntry(inserted);
   }
   const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
   const entry: LossEntry = { ...data, id: generateId(), createdAt: now() };

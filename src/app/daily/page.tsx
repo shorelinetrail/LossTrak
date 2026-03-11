@@ -110,7 +110,8 @@ export default function DailyPage() {
         setCategories(cats);
         setSubcategories(subs);
         setDetailCodes(codes);
-      } catch {
+      } catch (err) {
+        console.error("Failed to load config:", err);
         toast.error("Failed to load configuration data.");
       }
     };
@@ -137,7 +138,8 @@ export default function DailyPage() {
         // Load recent history (30 days before selected date, panel slices locally)
         const history = await getRecentHistory(dateKey, 30);
         setRecentHistory(history);
-      } catch {
+      } catch (err) {
+        console.error("Failed to load daily data:", err);
         toast.error("Failed to load daily data.");
       } finally {
         setLoading(false);
@@ -196,7 +198,8 @@ export default function DailyPage() {
       setDailyLog(log);
       setLossEntries([]);
       toast.success("Daily log created. Start adding loss entries.");
-    } catch {
+    } catch (err) {
+      console.error("Failed to create daily log:", err);
       toast.error("Failed to create daily log.");
     } finally {
       setSaving(false);
@@ -212,7 +215,8 @@ export default function DailyPage() {
       try {
         const updated = await updateDailyLog(dateKey, { production: prod });
         setDailyLog(updated);
-      } catch {
+      } catch (err) {
+        console.error("Failed to update production:", err);
         toast.error("Failed to update production.");
       }
     },
@@ -248,8 +252,10 @@ export default function DailyPage() {
         comments: "",
       });
       setLossEntries((prev) => [...prev, entry]);
-    } catch {
-      toast.error("Failed to add loss entry.");
+    } catch (err) {
+      console.error("Failed to add loss entry:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Failed to add loss entry: ${msg}`);
     }
   }, [dailyLog, dateKey]);
 
@@ -282,7 +288,8 @@ export default function DailyPage() {
           updateData.detailCodeId = "";
         }
         await updateLossEntry(entryId, updateData);
-      } catch {
+      } catch (err) {
+        console.error("Failed to save loss entry:", err);
         toast.error("Failed to save loss entry.");
       }
     },
@@ -295,7 +302,8 @@ export default function DailyPage() {
       await deleteLossEntry(entryId);
       setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
       toast.success("Loss entry removed.");
-    } catch {
+    } catch (err) {
+      console.error("Failed to delete loss entry:", err);
       toast.error("Failed to delete loss entry.");
     }
   }, []);
@@ -311,7 +319,8 @@ export default function DailyPage() {
       });
       setDailyLog(updated);
       toast.success("Day closed successfully.");
-    } catch {
+    } catch (err) {
+      console.error("Failed to close day:", err);
       toast.error("Failed to close day.");
     } finally {
       setSaving(false);
@@ -326,7 +335,8 @@ export default function DailyPage() {
       const updated = await updateDailyLog(dateKey, { status: "open" });
       setDailyLog(updated);
       toast.success("Day reopened for editing.");
-    } catch {
+    } catch (err) {
+      console.error("Failed to reopen day:", err);
       toast.error("Failed to reopen day.");
     } finally {
       setSaving(false);
@@ -360,7 +370,8 @@ export default function DailyPage() {
             ? `Copied ${count} ${label} with amounts.`
             : `Carried forward ${count} ${label}. Adjust amounts for today.`
         );
-      } catch {
+      } catch (err) {
+        console.error("Failed to carry forward entries:", err);
         toast.error("Failed to carry forward entries.");
       }
     },
