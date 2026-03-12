@@ -647,88 +647,35 @@ export function LossContextPanel({
                             </td>
                             {cells.map((cell) => (
                               <td key={cell.date} className="py-1 px-1">
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div
-                                      className={cn(
-                                        "relative rounded px-1.5 py-1 text-center tabular-nums transition-colors cursor-pointer",
-                                        cell.total > 0
-                                          ? heatColor(
-                                              cell.total,
-                                              heatmapData.globalMax
-                                            )
-                                          : "text-muted-foreground/30",
-                                        selectedCell?.categoryId ===
-                                          category.id &&
-                                          selectedCell?.date === cell.date &&
-                                          "ring-2 ring-primary ring-offset-1"
-                                      )}
-                                      onClick={() =>
-                                        cell.total > 0 &&
-                                        handleCellClick(
-                                          category.id,
-                                          cell.date
+                                <div
+                                  className={cn(
+                                    "relative rounded px-1.5 py-1 text-center tabular-nums transition-colors cursor-pointer",
+                                    cell.total > 0
+                                      ? heatColor(
+                                          cell.total,
+                                          heatmapData.globalMax
                                         )
-                                      }
-                                    >
-                                      {cell.total > 0
-                                        ? cell.total.toLocaleString()
-                                        : "\u2014"}
-                                      {cell.comments.length > 0 && (
-                                        <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
-                                      )}
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent
-                                    side="top"
-                                    className="text-xs max-w-[280px]"
-                                  >
-                                    <div className="font-medium">
-                                      {category.name} &mdash;{" "}
-                                      {format(parseISO(cell.date), "MMM d")}
-                                    </div>
-                                    <div>
-                                      {cell.total.toLocaleString()}{" "}
-                                      {productionUnit}
-                                    </div>
-                                    {cell.subBreakdown.length > 0 && (
-                                      <div className="mt-1 border-t border-border/40 pt-1 space-y-0.5">
-                                        {cell.subBreakdown.map((b) => (
-                                          <div
-                                            key={b.name}
-                                            className="flex justify-between gap-3"
-                                          >
-                                            <span className="text-muted-foreground">
-                                              {b.name}
-                                            </span>
-                                            <span className="tabular-nums">
-                                              {b.amount.toLocaleString()}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {cell.comments.length > 0 && (
-                                      <div className="mt-1 border-t border-border/40 pt-1 space-y-0.5">
-                                        {cell.comments.map((c, i) => (
-                                          <div key={i} className="text-muted-foreground">
-                                            {c.sub && (
-                                              <span className="font-medium text-foreground">
-                                                {c.sub}:{" "}
-                                              </span>
-                                            )}
-                                            <span className="italic">&ldquo;{c.text}&rdquo;</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {cell.total > 0 && (
-                                      <div className="mt-1 text-muted-foreground italic">
-                                        Click to view entries
-                                      </div>
-                                    )}
-                                  </TooltipContent>
-                                </Tooltip>
+                                      : "text-muted-foreground/30",
+                                    selectedCell?.categoryId ===
+                                      category.id &&
+                                      selectedCell?.date === cell.date &&
+                                      "ring-2 ring-primary ring-offset-1"
+                                  )}
+                                  onClick={() =>
+                                    cell.total > 0 &&
+                                    handleCellClick(
+                                      category.id,
+                                      cell.date
+                                    )
+                                  }
+                                >
+                                  {cell.total > 0
+                                    ? cell.total.toLocaleString()
+                                    : "\u2014"}
+                                  {cell.comments.length > 0 && (
+                                    <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-blue-500" />
+                                  )}
+                                </div>
                               </td>
                             ))}
                             <td className="py-1 pl-2 text-right font-medium tabular-nums">
@@ -861,21 +808,21 @@ export function LossContextPanel({
                 {selectedCellEntries.map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex items-center gap-2 text-xs bg-background rounded px-2 py-1.5 border"
+                    className="flex items-center gap-3 text-xs bg-background rounded-md px-3 py-2 border"
                   >
-                    <span className="font-medium min-w-[80px]">
+                    <span className="font-medium shrink-0">
                       {subcategoryMap[entry.subcategoryId]?.name ?? "\u2014"}
                     </span>
                     <Badge
-                      variant="outline"
-                      className="text-[10px] px-1.5 py-0 capitalize"
+                      variant="secondary"
+                      className="text-[10px] px-1.5 py-0 capitalize shrink-0"
                     >
                       {entry.lossType}
                     </Badge>
-                    <span className="font-medium tabular-nums">
+                    <span className="font-medium tabular-nums shrink-0">
                       {entry.amount.toLocaleString()} {productionUnit}
                     </span>
-                    <span className="flex-1 text-muted-foreground truncate">
+                    <span className="flex-1 text-muted-foreground truncate min-w-0">
                       {entry.comments || "\u2014"}
                     </span>
                     {!disabled && (
