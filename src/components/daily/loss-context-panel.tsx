@@ -822,9 +822,11 @@ export function LossContextPanel({
                     <span className="font-medium tabular-nums shrink-0">
                       {entry.amount.toLocaleString()} {productionUnit}
                     </span>
-                    <span className="flex-1 text-muted-foreground truncate min-w-0">
-                      {entry.comments || "\u2014"}
-                    </span>
+                    {entry.comments && (
+                      <span className="flex-1 text-muted-foreground truncate min-w-0">
+                        {entry.comments}
+                      </span>
+                    )}
                     {!disabled && (
                       <span className="flex gap-0.5 shrink-0">
                         <Tooltip>
