@@ -1111,11 +1111,11 @@ External,Feedstock Quality,slowdown,1`;
 
       {/* Bulk Upload Categories Dialog */}
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Upload Categories from CSV</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-3 py-2 overflow-y-auto flex-1 min-h-0">
             <p className="text-xs text-muted-foreground">
               Upload a CSV with columns: <span className="font-mono">category, subcategory, loss_types, display_order</span>.
               Existing categories/subcategories are skipped.
