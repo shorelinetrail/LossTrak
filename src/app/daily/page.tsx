@@ -135,7 +135,7 @@ function SubcategoryCombobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "border-input flex items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
+            "border-input flex items-center justify-between gap-1 rounded-md border bg-transparent px-2 whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
             !selectedName && "text-muted-foreground"
           )}
           style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
@@ -1259,9 +1259,9 @@ export default function DailyPage() {
                           </span>
                           <div className="flex flex-1 items-center gap-1.5">
                             {/* Category + Subcategory side-by-side with no gap */}
-                            <div className="flex items-center">
+                            <div className="flex items-center gap-1.5">
                               <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                                <SelectTrigger className="rounded-r-none border-r-0" style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
+                                <SelectTrigger style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
                                 <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
                               </Select>
                               <SubcategoryCombobox
