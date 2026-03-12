@@ -135,9 +135,10 @@ function SubcategoryCombobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "border-input flex h-7 items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 text-xs whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
+            "border-input flex items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 text-xs whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
             !selectedName && "text-muted-foreground"
           )}
+          style={{ height: '1.75rem' }}
         >
           <span className="truncate">{selectedName ?? "Subcategory"}</span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
@@ -1260,7 +1261,7 @@ export default function DailyPage() {
                             {/* Category + Subcategory side-by-side with no gap */}
                             <div className="flex items-center">
                               <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                                <SelectTrigger className="h-7 text-xs rounded-r-none border-r-0" style={{ width: categoryMinWidth }}><SelectValue placeholder="Category" /></SelectTrigger>
+                                <SelectTrigger className="text-xs rounded-r-none border-r-0" style={{ width: categoryMinWidth, height: '1.75rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
                                 <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
                               </Select>
                               <SubcategoryCombobox
@@ -1272,7 +1273,7 @@ export default function DailyPage() {
                             </div>
                             {hasDetailCodes && (
                               <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
-                                <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Detail code" /></SelectTrigger>
+                                <SelectTrigger className="text-xs" style={{ height: '1.75rem' }}><SelectValue placeholder="Detail code" /></SelectTrigger>
                                 <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
                               </Select>
                             )}
