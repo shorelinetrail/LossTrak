@@ -135,10 +135,10 @@ function SubcategoryCombobox({
           aria-expanded={open}
           disabled={disabled}
           className={cn(
-            "border-input flex items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 text-xs whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
+            "border-input flex items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
             !selectedName && "text-muted-foreground"
           )}
-          style={{ height: '1.75rem' }}
+          style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
         >
           <span className="truncate">{selectedName ?? "Subcategory"}</span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
@@ -1261,7 +1261,7 @@ export default function DailyPage() {
                             {/* Category + Subcategory side-by-side with no gap */}
                             <div className="flex items-center">
                               <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                                <SelectTrigger className="text-xs rounded-r-none border-r-0" style={{ width: categoryMinWidth, height: '1.75rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
+                                <SelectTrigger className="rounded-r-none border-r-0" style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
                                 <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
                               </Select>
                               <SubcategoryCombobox
@@ -1273,7 +1273,7 @@ export default function DailyPage() {
                             </div>
                             {hasDetailCodes && (
                               <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
-                                <SelectTrigger className="text-xs" style={{ height: '1.75rem' }}><SelectValue placeholder="Detail code" /></SelectTrigger>
+                                <SelectTrigger style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Detail code" /></SelectTrigger>
                                 <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
                               </Select>
                             )}
@@ -1331,7 +1331,8 @@ export default function DailyPage() {
                                 min="0"
                                 step="any"
                                 placeholder="0"
-                                className="h-7 text-xs pr-10"
+                                className="pr-10"
+                                style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
                                 value={displayValue}
                                 onChange={(e) => {
                                   const raw = parseFloat(e.target.value) || 0;
@@ -1363,7 +1364,8 @@ export default function DailyPage() {
                           {/* Comments */}
                           <Input
                             placeholder="Notes..."
-                            className="h-7 text-xs flex-1 min-w-0"
+                            className="flex-1 min-w-0"
+                            style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
                             value={entry.comments ?? ""}
                             onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)}
                             disabled={isClosed}
