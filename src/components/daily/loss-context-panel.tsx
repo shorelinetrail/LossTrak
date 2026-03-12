@@ -810,15 +810,15 @@ export function LossContextPanel({
                     key={entry.id}
                     className="flex items-center gap-3 text-xs bg-background rounded-md px-3 py-2 border"
                   >
-                    <span className="font-medium shrink-0">
-                      {subcategoryMap[entry.subcategoryId]?.name ?? "\u2014"}
-                    </span>
                     <Badge
                       variant="secondary"
                       className="text-[10px] px-1.5 py-0 capitalize shrink-0"
                     >
                       {entry.lossType}
                     </Badge>
+                    <span className="font-medium shrink-0">
+                      {subcategoryMap[entry.subcategoryId]?.name ?? "\u2014"}
+                    </span>
                     <span className="font-medium tabular-nums shrink-0">
                       {entry.amount.toLocaleString()} {productionUnit}
                     </span>
