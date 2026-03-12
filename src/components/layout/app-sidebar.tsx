@@ -11,6 +11,7 @@ import {
   Settings,
   Tags,
   Upload,
+  History,
   ChevronDown,
   ChevronRight,
   Activity,
@@ -47,6 +48,7 @@ const navigation: (NavItem | NavGroup)[] = [
     items: [
       { label: "Categories", href: "/admin/categories", icon: Tags },
       { label: "Bulk Upload", href: "/admin/bulk-upload", icon: Upload },
+      { label: "Historical Upload", href: "/admin/historical-upload", icon: History },
       { label: "Settings", href: "/admin/settings", icon: Settings },
     ],
   },
