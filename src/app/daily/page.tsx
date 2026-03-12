@@ -129,16 +129,19 @@ function SubcategoryCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="outline"
+        <button
+          type="button"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="h-7 rounded-l-none text-xs font-normal justify-between gap-1 min-w-[120px] px-2"
+          className={cn(
+            "border-input flex h-7 items-center justify-between gap-1 rounded-md rounded-l-none border bg-transparent px-2 text-xs whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none disabled:cursor-not-allowed disabled:opacity-50 min-w-[120px]",
+            !selectedName && "text-muted-foreground"
+          )}
         >
           <span className="truncate">{selectedName ?? "Subcategory"}</span>
           <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
-        </Button>
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0" align="start">
         <Command>
