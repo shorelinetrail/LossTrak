@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   getAllCategories,
   getAllSubcategories,
@@ -36,9 +36,30 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Pencil, Trash2, Tags, ChevronDown, ChevronRight } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Plus, Pencil, Trash2, Tags, ChevronDown, ChevronRight, Upload, Download, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+function downloadCsv(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<LossCategory[]>([]);
@@ -98,6 +119,144 @@ export default function CategoriesPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Bulk upload state
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadCsv, setUploadCsv] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadResults, setUploadResults] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
+
+  const CATEGORY_TEMPLATE = `category,subcategory,loss_types,display_order
+Mechanical,Pump Failure,shutdown;slowdown,1
+Mechanical,Bearing Wear,shutdown;slowdown,2
+Process,Fouling,slowdown,1
+Process,Catalyst Degradation,slowdown,2
+External,Feedstock Quality,slowdown,1`;
+
+  const parsedUploadRows = useMemo(() => {
+    if (!uploadCsv.trim()) return [];
+    const lines = uploadCsv.trim().split("\n");
+    if (lines.length < 2) return [];
+    const header = lines[0].toLowerCase();
+    const hasHeader = header.includes("category") || header.includes("subcategory");
+    const dataLines = hasHeader ? lines.slice(1) : lines;
+    return dataLines.map((line, idx) => {
+      const cols = line.split(",").map((c) => c.trim());
+      if (cols.length < 2) return { line: idx + (hasHeader ? 2 : 1), category: "", subcategory: "", lossTypes: "" as string, order: 0, error: "Need at least category and subcategory columns" };
+      const [cat, sub, types, orderStr] = cols;
+      return {
+        line: idx + (hasHeader ? 2 : 1),
+        category: cat || "",
+        subcategory: sub || "",
+        lossTypes: types || "shutdown;slowdown",
+        order: parseInt(orderStr) || 0,
+        error: !cat ? "Category name required" : !sub ? "Subcategory name required" : undefined,
+      };
+    });
+  }, [uploadCsv]);
+
+  const handleBulkUpload = useCallback(async () => {
+    const valid = parsedUploadRows.filter((r) => !r.error);
+    if (valid.length === 0) { toast.error("No valid rows to import."); return; }
+    setUploading(true);
+    let created = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+    try {
+      // Group by category
+      const grouped = new Map<string, typeof valid>();
+      for (const row of valid) {
+        const key = row.category.toLowerCase();
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key)!.push(row);
+      }
+
+      for (const [, rows] of grouped) {
+        const catName = rows[0].category;
+        const typesStr = rows[0].lossTypes;
+        const allowedTypes: LossType[] = [];
+        if (typesStr.includes("shutdown")) allowedTypes.push("shutdown");
+        if (typesStr.includes("slowdown")) allowedTypes.push("slowdown");
+        if (allowedTypes.length === 0) allowedTypes.push("shutdown", "slowdown");
+
+        // Check if category already exists
+        let existingCat = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
+        if (!existingCat) {
+          existingCat = await createCategory({
+            name: catName,
+            allowedLossTypes: allowedTypes,
+            displayOrder: rows[0].order,
+            isActive: true,
+          });
+          created++;
+        }
+
+        // Create subcategories
+        for (const row of rows) {
+          const existingSub = subcategories.find(
+            (s) => s.categoryId === existingCat!.id && s.name.toLowerCase() === row.subcategory.toLowerCase()
+          );
+          if (existingSub) {
+            skipped++;
+            continue;
+          }
+          try {
+            await createSubcategory({
+              categoryId: existingCat.id,
+              name: row.subcategory,
+              displayOrder: row.order,
+              isActive: true,
+            });
+            created++;
+          } catch (e) {
+            errors.push(`L${row.line}: Failed to create "${row.subcategory}"`);
+          }
+        }
+      }
+
+      setUploadResults({ created, skipped, errors });
+      await loadData();
+      if (created > 0) toast.success(`Created ${created} categories/subcategories.`);
+      if (skipped > 0) toast.info(`Skipped ${skipped} existing subcategories.`);
+    } catch {
+      toast.error("Upload failed.");
+    } finally {
+      setUploading(false);
+    }
+  }, [parsedUploadRows, categories, subcategories]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDownloadCategoryTemplate = useCallback(() => {
+    const header = "category,subcategory,loss_types,display_order";
+    const rows: string[] = [header];
+    let order = 0;
+    for (const cat of categories) {
+      const catSubs = subcategories.filter((s) => s.categoryId === cat.id);
+      if (catSubs.length === 0) {
+        rows.push(`${cat.name},,${cat.allowedLossTypes.join(";")},${++order}`);
+      } else {
+        for (const sub of catSubs) {
+          rows.push(`${cat.name},${sub.name},${cat.allowedLossTypes.join(";")},${++order}`);
+        }
+      }
+    }
+    // If no data yet, use sample
+    if (categories.length === 0) {
+      return downloadCsv(CATEGORY_TEMPLATE, "category-template.csv");
+    }
+    downloadCsv(rows.join("\n"), "category-template.csv");
+  }, [categories, subcategories]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCategoryFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result;
+      if (typeof text === "string") { setUploadCsv(text); setUploadResults(null); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, []);
 
   const toggleExpanded = (categoryId: string) => {
     setExpandedCategories((prev) => {
@@ -377,13 +536,18 @@ export default function CategoriesPage() {
             Manage categories and subcategories for classifying production losses.
           </p>
         </div>
-        <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Category
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => { setUploadCsv(""); setUploadResults(null); setUploadOpen(true); }}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload CSV
+          </Button>
+          <Dialog open={addCategoryOpen} onOpenChange={setAddCategoryOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Category
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Category</DialogTitle>
@@ -445,6 +609,7 @@ export default function CategoriesPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {categories.length === 0 && (
@@ -940,6 +1105,123 @@ export default function CategoriesPage() {
               Cancel
             </Button>
             <Button onClick={handleEditDetailCodeSave}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Upload Categories Dialog */}
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Upload Categories from CSV</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Upload a CSV with columns: <span className="font-mono">category, subcategory, loss_types, display_order</span>.
+              Existing categories/subcategories are skipped.
+            </p>
+            <details className="group">
+              <summary className="text-xs font-medium cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
+                CSV format example
+              </summary>
+              <div className="mt-1.5 rounded bg-muted/50 p-2 text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed">
+                {CATEGORY_TEMPLATE}
+              </div>
+            </details>
+            <Textarea
+              placeholder="Paste CSV data here..."
+              rows={5}
+              className="font-mono text-xs"
+              value={uploadCsv}
+              onChange={(e) => { setUploadCsv(e.target.value); setUploadResults(null); }}
+            />
+            <div className="flex items-center gap-2">
+              <label className="cursor-pointer">
+                <input type="file" accept=".csv,.txt" className="hidden" onChange={handleCategoryFileUpload} />
+                <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                  <span><FileSpreadsheet className="h-3.5 w-3.5 mr-1" />Upload File</span>
+                </Button>
+              </label>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleDownloadCategoryTemplate}>
+                <Download className="h-3.5 w-3.5 mr-1" />Download Template
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setUploadCsv(CATEGORY_TEMPLATE); setUploadResults(null); }}>
+                Load Example
+              </Button>
+            </div>
+
+            {/* Preview */}
+            {parsedUploadRows.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium">Preview</span>
+                  {parsedUploadRows.filter((r) => !r.error).length > 0 && (
+                    <Badge variant="secondary" className="gap-1 h-5 text-[10px]">
+                      <CheckCircle2 className="h-2.5 w-2.5 text-green-600" />
+                      {parsedUploadRows.filter((r) => !r.error).length} valid
+                    </Badge>
+                  )}
+                  {parsedUploadRows.filter((r) => r.error).length > 0 && (
+                    <Badge variant="destructive" className="gap-1 h-5 text-[10px]">
+                      <AlertCircle className="h-2.5 w-2.5" />
+                      {parsedUploadRows.filter((r) => r.error).length} errors
+                    </Badge>
+                  )}
+                </div>
+                {parsedUploadRows.filter((r) => r.error).length > 0 && (
+                  <div className="space-y-0.5">
+                    {parsedUploadRows.filter((r) => r.error).map((row) => (
+                      <div key={row.line} className="text-[11px] rounded border border-destructive/30 bg-destructive/5 px-2 py-1">
+                        <span className="font-medium">L{row.line}:</span> {row.error}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="rounded-md border overflow-hidden max-h-[200px] overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-[11px] h-7 py-0">Category</TableHead>
+                        <TableHead className="text-[11px] h-7 py-0">Subcategory</TableHead>
+                        <TableHead className="text-[11px] h-7 py-0">Types</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {parsedUploadRows.filter((r) => !r.error).map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-[11px] py-1">{row.category}</TableCell>
+                          <TableCell className="text-[11px] py-1">{row.subcategory}</TableCell>
+                          <TableCell className="text-[11px] py-1">{row.lossTypes}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            {/* Results */}
+            {uploadResults && (
+              <div className="rounded-md border p-2 bg-muted/30 text-xs space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                  <span className="font-medium">Upload complete</span>
+                </div>
+                <p>{uploadResults.created} created, {uploadResults.skipped} skipped</p>
+                {uploadResults.errors.length > 0 && (
+                  <div className="text-destructive">{uploadResults.errors.join(", ")}</div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUploadOpen(false)}>Close</Button>
+            {!uploadResults && parsedUploadRows.filter((r) => !r.error).length > 0 && (
+              <Button onClick={handleBulkUpload} disabled={uploading}>
+                {uploading ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Upload className="h-4 w-4 mr-1.5" />}
+                Import {parsedUploadRows.filter((r) => !r.error).length} Rows
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

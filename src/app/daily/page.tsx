@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getBarRate,
   getProductionUnit,
@@ -48,6 +48,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -76,6 +84,8 @@ import {
   ArrowDown,
   Filter,
   X,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { format, parseISO, addDays, subDays, isToday } from "date-fns";
 import { toast } from "sonner";
@@ -99,6 +109,64 @@ type SortColumn =
   | "status";
 type SortDir = "asc" | "desc";
 type StatusFilter = "all" | "open" | "closed";
+
+// ─── Subcategory Combobox ────────────────────────────────────────
+
+function SubcategoryCombobox({
+  value,
+  onValueChange,
+  subcategories,
+  disabled,
+}: {
+  value: string;
+  onValueChange: (v: string) => void;
+  subcategories: LossSubcategory[];
+  disabled: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const selectedName = subcategories.find((s) => s.id === value)?.name;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="h-7 rounded-l-none text-xs font-normal justify-between gap-1 min-w-[120px] px-2"
+        >
+          <span className="truncate">{selectedName ?? "Subcategory"}</span>
+          <ChevronsUpDown className="h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search..." className="h-8 text-xs" />
+          <CommandList>
+            <CommandEmpty className="py-3 text-xs">No results.</CommandEmpty>
+            <CommandGroup>
+              {subcategories.map((sub) => (
+                <CommandItem
+                  key={sub.id}
+                  value={sub.name}
+                  onSelect={() => {
+                    onValueChange(sub.id);
+                    setOpen(false);
+                  }}
+                  className="text-xs"
+                >
+                  <Check className={cn("mr-1.5 h-3 w-3", value === sub.id ? "opacity-100" : "opacity-0")} />
+                  {sub.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -328,6 +396,12 @@ export default function DailyPage() {
 
   const accountedPct = absDelta > 0 ? Math.min((totalAccounted / absDelta) * 100, 100) : 0;
   const remainingPct = Math.max(0, 100 - accountedPct);
+
+  // Category dropdown width based on longest name (~7.2px per char at text-xs + padding)
+  const categoryMinWidth = useMemo(() => {
+    const longest = categories.reduce((max, c) => Math.max(max, c.name.length), 0);
+    return Math.max(longest * 7.2 + 40, 100); // 40px for padding + chevron
+  }, [categories]);
 
   // Unit conversion
   const hourlyRate = operatingHours > 0 ? bar / operatingHours : 0;
@@ -1179,15 +1253,20 @@ export default function DailyPage() {
                           <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-4">
                             {index + 1}
                           </span>
-                          <div className={cn("flex-1 grid grid-cols-1 gap-1.5", hasDetailCodes ? "md:grid-cols-[1fr_1fr_1fr]" : "md:grid-cols-[1fr_1fr]")}>
-                            <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Category" /></SelectTrigger>
-                              <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
-                            </Select>
-                            <Select value={entry.subcategoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)} disabled={isClosed || !entry.categoryId}>
-                              <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Subcategory" /></SelectTrigger>
-                              <SelectContent>{filteredSubcategories.map((sub) => (<SelectItem key={sub.id} value={sub.id}>{sub.name}</SelectItem>))}</SelectContent>
-                            </Select>
+                          <div className="flex flex-1 items-center gap-1.5">
+                            {/* Category + Subcategory side-by-side with no gap */}
+                            <div className="flex items-center">
+                              <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
+                                <SelectTrigger className="h-7 text-xs rounded-r-none border-r-0" style={{ width: categoryMinWidth }}><SelectValue placeholder="Category" /></SelectTrigger>
+                                <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
+                              </Select>
+                              <SubcategoryCombobox
+                                value={entry.subcategoryId}
+                                onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)}
+                                subcategories={filteredSubcategories}
+                                disabled={isClosed || !entry.categoryId}
+                              />
+                            </div>
                             {hasDetailCodes && (
                               <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
                                 <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Detail code" /></SelectTrigger>
