@@ -1262,7 +1262,7 @@ export default function DailyPage() {
                             <div className="flex items-center gap-1.5">
                               <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
                                 <SelectTrigger style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
-                                <SelectContent>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
+                                <SelectContent style={{ fontSize: '0.75rem' }}>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.name}</SelectItem>))}</SelectContent>
                               </Select>
                               <SubcategoryCombobox
                                 value={entry.subcategoryId}
@@ -1274,7 +1274,7 @@ export default function DailyPage() {
                             {hasDetailCodes && (
                               <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
                                 <SelectTrigger style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Detail code" /></SelectTrigger>
-                                <SelectContent>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id}>{dc.name}</SelectItem>))}</SelectContent>
+                                <SelectContent style={{ fontSize: '0.75rem' }}>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id} className="text-xs">{dc.name}</SelectItem>))}</SelectContent>
                               </Select>
                             )}
                           </div>
