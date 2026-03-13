@@ -539,6 +539,13 @@ export default function TableReportPage() {
             </p>
           ) : (
             <Table>
+              <colgroup>
+                <col className="w-[40%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Category</TableHead>
@@ -595,6 +602,13 @@ export default function TableReportPage() {
             </p>
           ) : (
             <Table>
+              <colgroup>
+                <col className="w-[40%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead>Subcategory</TableHead>
