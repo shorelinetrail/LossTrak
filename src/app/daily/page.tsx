@@ -94,6 +94,7 @@ import { format, parseISO, addDays, subDays, isToday } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LossContextPanel } from "@/components/daily/loss-context-panel";
+import { BulkEntryDialog } from "@/components/daily/bulk-entry-dialog";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ export default function DailyPage() {
   // null = table view, Date = entry form for that date
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
 
   const [bar, setBar] = useState<number>(0);
   const [operatingHours, setOperatingHours] = useState<number>(24);
@@ -805,6 +807,15 @@ export default function DailyPage() {
             Daily Loss Accounting
           </h1>
           <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setBulkDialogOpen(true)}
+            >
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              Bulk Entry
+            </Button>
             <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-7 text-xs">
@@ -1033,6 +1044,16 @@ export default function DailyPage() {
             )}
           </CardContent>
         </Card>
+
+        <BulkEntryDialog
+          open={bulkDialogOpen}
+          onOpenChange={setBulkDialogOpen}
+          onSaved={refreshLogTable}
+          bar={bar}
+          productionUnit={productionUnit}
+          categories={categories}
+          subcategories={subcategories}
+        />
       </div>
     );
   }
