@@ -601,6 +601,7 @@ export default function TableReportPage() {
                   <TableHead className="text-right">Shutdown</TableHead>
                   <TableHead className="text-right">Slowdown</TableHead>
                   <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">% of Losses</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -608,7 +609,7 @@ export default function TableReportPage() {
                   .filter((g) => g.subcategories.some((s) => s.total > 0))
                   .flatMap((group) => [
                     <TableRow key={`cat-${group.categoryId}`} className="bg-muted/50">
-                      <TableCell colSpan={4} className="font-semibold text-sm py-2">
+                      <TableCell colSpan={5} className="font-semibold text-sm py-2">
                         {group.categoryName}
                       </TableCell>
                     </TableRow>,
@@ -621,6 +622,11 @@ export default function TableReportPage() {
                           <TableCell className="text-right">{fmtNum(sub.shutdown)}</TableCell>
                           <TableCell className="text-right">{fmtNum(sub.slowdown)}</TableCell>
                           <TableCell className="text-right font-medium">{fmtNum(sub.total)}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant="outline">
+                              {fmtPct(sub.total, totalLosses)}
+                            </Badge>
+                          </TableCell>
                         </TableRow>
                       )),
                   ])}
