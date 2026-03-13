@@ -8,6 +8,7 @@ import {
   CalendarDays,
   CalendarRange,
   CalendarClock,
+  TableProperties,
   Settings,
   Tags,
   Upload,
@@ -41,6 +42,7 @@ const navigation: (NavItem | NavGroup)[] = [
       { label: "Monthly", href: "/reports/monthly", icon: CalendarDays },
       { label: "Quarterly", href: "/reports/quarterly", icon: CalendarRange },
       { label: "Yearly", href: "/reports/yearly", icon: CalendarClock },
+      { label: "Table", href: "/reports/table", icon: TableProperties },
     ],
   },
   {
