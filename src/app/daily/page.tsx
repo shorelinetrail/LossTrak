@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getBarRate,
   getProductionUnit,
@@ -198,6 +198,7 @@ export default function DailyPage() {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastCheckedRef = useRef<string | null>(null);
 
   // ── Selected-day entry state ─────────────────────────────────
   // null = table view, Date = entry form for that date
@@ -689,14 +690,32 @@ export default function DailyPage() {
   }, []);
 
   // ── Bulk actions ───────────────────────────────────────────────
-  const toggleSelectId = useCallback((id: string) => {
+  const toggleSelectId = useCallback((id: string, e?: React.MouseEvent) => {
+    if (e?.shiftKey && lastCheckedRef.current) {
+      // Shift-click: select range between last checked and this one
+      const ids = filteredLogs.map((l) => l.id);
+      const lastIdx = ids.indexOf(lastCheckedRef.current);
+      const curIdx = ids.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const [start, end] = lastIdx < curIdx ? [lastIdx, curIdx] : [curIdx, lastIdx];
+        const rangeIds = ids.slice(start, end + 1);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          for (const rid of rangeIds) next.add(rid);
+          return next;
+        });
+        lastCheckedRef.current = id;
+        return;
+      }
+    }
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }, []);
+    lastCheckedRef.current = id;
+  }, [filteredLogs]);
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
@@ -705,8 +724,11 @@ export default function DailyPage() {
     });
   }, [filteredLogs]);
 
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
+
   const handleBulkClose = useCallback(async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIdsRef.current);
     if (ids.length === 0) return;
     try {
       await bulkUpdateDayStatus(ids, "closed");
@@ -717,10 +739,10 @@ export default function DailyPage() {
       console.error("Bulk close failed:", err);
       toast.error("Failed to close selected days.");
     }
-  }, [selectedIds, refreshLogTable]);
+  }, [refreshLogTable]);
 
   const handleBulkReopen = useCallback(async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIdsRef.current);
     if (ids.length === 0) return;
     try {
       await bulkUpdateDayStatus(ids, "open");
@@ -731,10 +753,10 @@ export default function DailyPage() {
       console.error("Bulk reopen failed:", err);
       toast.error("Failed to reopen selected days.");
     }
-  }, [selectedIds, refreshLogTable]);
+  }, [refreshLogTable]);
 
   const handleBulkDelete = useCallback(async () => {
-    const ids = Array.from(selectedIds);
+    const ids = Array.from(selectedIdsRef.current);
     if (ids.length === 0) return;
     if (!confirm(`Delete ${ids.length} day${ids.length > 1 ? "s" : ""} and all their loss entries? This cannot be undone.`)) return;
     try {
@@ -746,7 +768,7 @@ export default function DailyPage() {
       console.error("Bulk delete failed:", err);
       toast.error("Failed to delete selected days.");
     }
-  }, [selectedIds, refreshLogTable]);
+  }, [refreshLogTable]);
 
   const handleDeleteDay = useCallback(async () => {
     if (!dailyLog) return;
@@ -943,12 +965,15 @@ export default function DailyPage() {
                         className={cn("cursor-pointer", selectedIds.has(log.id) && "bg-muted/50")}
                         onClick={() => handleOpenDate(parseISO(log.date))}
                       >
-                        <TableCell className="text-center py-1.5" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="text-center py-1.5" onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSelectId(log.id, e);
+                        }}>
                           <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer"
                             checked={selectedIds.has(log.id)}
-                            onChange={() => toggleSelectId(log.id)}
+                            readOnly
                           />
                         </TableCell>
                         <TableCell className="text-xs py-1.5 font-medium">
