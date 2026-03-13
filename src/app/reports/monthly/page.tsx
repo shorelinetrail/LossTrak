@@ -42,13 +42,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { TrendingUp, TrendingDown, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   format,
   startOfMonth,
   endOfMonth,
+  subMonths,
+  addMonths,
   eachDayOfInterval,
+  eachMonthOfInterval,
   parseISO,
   getMonth,
   getYear,
@@ -80,10 +84,13 @@ const MONTHS = [
   "December",
 ];
 
+type ViewMode = "month" | "rolling12";
+
 export default function MonthlyReportPage() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonth(now));
   const [selectedYear, setSelectedYear] = useState<number>(getYear(now));
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
 
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [allLossEntries, setAllLossEntries] = useState<LossEntry[]>([]);
@@ -95,6 +102,24 @@ export default function MonthlyReportPage() {
     const currentYear = getYear(new Date());
     return Array.from({ length: 10 }, (_, i) => currentYear - i);
   }, []);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear((y) => y - 1);
+    } else {
+      setSelectedMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear((y) => y + 1);
+    } else {
+      setSelectedMonth((m) => m + 1);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -110,12 +135,21 @@ export default function MonthlyReportPage() {
     load();
   }, []);
 
+  // Date range depending on view mode
+  const { rangeStart, rangeEnd } = useMemo(() => {
+    const anchor = new Date(selectedYear, selectedMonth, 1);
+    if (viewMode === "rolling12") {
+      const end = endOfMonth(anchor);
+      const start = startOfMonth(subMonths(anchor, 11));
+      return { rangeStart: start, rangeEnd: end };
+    }
+    return { rangeStart: startOfMonth(anchor), rangeEnd: endOfMonth(anchor) };
+  }, [selectedMonth, selectedYear, viewMode]);
+
   useEffect(() => {
     async function load() {
-      const monthStart = startOfMonth(new Date(selectedYear, selectedMonth, 1));
-      const monthEnd = endOfMonth(monthStart);
-      const startStr = format(monthStart, "yyyy-MM-dd");
-      const endStr = format(monthEnd, "yyyy-MM-dd");
+      const startStr = format(rangeStart, "yyyy-MM-dd");
+      const endStr = format(rangeEnd, "yyyy-MM-dd");
 
       const logs = await getDailyLogsByDateRange(startStr, endStr);
       setDailyLogs(logs);
@@ -123,18 +157,27 @@ export default function MonthlyReportPage() {
       const allLosses = await getAllLossEntries();
       const filtered = allLosses.filter((entry) => {
         const entryDate = parseISO(entry.date);
-        return entryDate >= monthStart && entryDate <= monthEnd;
+        return entryDate >= rangeStart && entryDate <= rangeEnd;
       });
       setAllLossEntries(filtered);
     }
     load();
-  }, [selectedMonth, selectedYear]);
+  }, [rangeStart, rangeEnd]);
 
   const daysInMonth = useMemo(() => {
+    if (viewMode === "rolling12") {
+      return eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+    }
     const monthStart = startOfMonth(new Date(selectedYear, selectedMonth, 1));
     const monthEnd = endOfMonth(monthStart);
     return eachDayOfInterval({ start: monthStart, end: monthEnd });
-  }, [selectedMonth, selectedYear]);
+  }, [selectedMonth, selectedYear, viewMode, rangeStart, rangeEnd]);
+
+  // Months in the rolling 12-month window (for rolling chart x-axis)
+  const rollingMonths = useMemo(() => {
+    if (viewMode !== "rolling12") return [];
+    return eachMonthOfInterval({ start: rangeStart, end: rangeEnd });
+  }, [viewMode, rangeStart, rangeEnd]);
 
   const logsByDate = useMemo(() => {
     const map: Record<string, DailyLog> = {};
@@ -181,8 +224,9 @@ export default function MonthlyReportPage() {
     [totalProduction, totalBAR]
   );
 
-  // Stacked bar chart data: daily losses by category
-  const stackedBarData = useMemo(() => {
+  // Stacked bar chart data: daily losses by category (single month view)
+  const stackedBarDataDaily = useMemo(() => {
+    if (viewMode === "rolling12") return [];
     return daysInMonth.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const dayLabel = format(day, "dd");
@@ -197,10 +241,32 @@ export default function MonthlyReportPage() {
       });
       return dataPoint;
     });
-  }, [daysInMonth, allLossEntries, categories]);
+  }, [daysInMonth, allLossEntries, categories, viewMode]);
 
-  // Line chart data: daily production vs BAR
-  const productionLineData = useMemo(() => {
+  // Stacked bar chart data: monthly losses by category (rolling 12 view)
+  const stackedBarDataMonthly = useMemo(() => {
+    if (viewMode !== "rolling12") return [];
+    return rollingMonths.map((month) => {
+      const monthLabel = format(month, "MMM yy");
+      const monthStr = format(month, "yyyy-MM");
+      const monthLosses = allLossEntries.filter((e) => e.date.startsWith(monthStr));
+
+      const dataPoint: Record<string, string | number> = { day: monthLabel };
+      categories.forEach((cat) => {
+        const catLoss = monthLosses
+          .filter((e) => e.categoryId === cat.id)
+          .reduce((sum, e) => sum + (e.amount ?? 0), 0);
+        dataPoint[cat.name] = catLoss;
+      });
+      return dataPoint;
+    });
+  }, [rollingMonths, allLossEntries, categories, viewMode]);
+
+  const stackedBarData = viewMode === "rolling12" ? stackedBarDataMonthly : stackedBarDataDaily;
+
+  // Line chart data: daily production vs BAR (single month)
+  const productionLineDataDaily = useMemo(() => {
+    if (viewMode === "rolling12") return [];
     return daysInMonth.map((day) => {
       const dateStr = format(day, "yyyy-MM-dd");
       const dayLabel = format(day, "dd");
@@ -211,7 +277,24 @@ export default function MonthlyReportPage() {
         BAR: log?.bar ?? 0,
       };
     });
-  }, [daysInMonth, dailyLogs]);
+  }, [daysInMonth, dailyLogs, viewMode]);
+
+  // Line chart data: monthly production vs BAR (rolling 12)
+  const productionLineDataMonthly = useMemo(() => {
+    if (viewMode !== "rolling12") return [];
+    return rollingMonths.map((month) => {
+      const monthLabel = format(month, "MMM yy");
+      const monthStr = format(month, "yyyy-MM");
+      const monthLogs = dailyLogs.filter((l) => l.date.startsWith(monthStr));
+      return {
+        day: monthLabel,
+        Production: monthLogs.reduce((sum, l) => sum + (l.production ?? 0), 0),
+        BAR: monthLogs.reduce((sum, l) => sum + (l.bar ?? 0), 0),
+      };
+    });
+  }, [rollingMonths, dailyLogs, viewMode]);
+
+  const productionLineData = viewMode === "rolling12" ? productionLineDataMonthly : productionLineDataDaily;
 
   // Category summary table
   const categorySummary = useMemo(() => {
@@ -303,15 +386,50 @@ export default function MonthlyReportPage() {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Monthly Report</h1>
           <p className="text-sm text-muted-foreground">
-            {MONTHS[selectedMonth]} {selectedYear}
+            {viewMode === "rolling12"
+              ? `${format(rangeStart, "MMM yyyy")} – ${format(rangeEnd, "MMM yyyy")}`
+              : `${MONTHS[selectedMonth]} ${selectedYear}`}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* View mode toggle */}
+          <div className="flex rounded-md border border-input overflow-hidden h-9">
+            <button
+              type="button"
+              onClick={() => setViewMode("month")}
+              className={cn(
+                "px-3 text-xs font-medium transition-colors",
+                viewMode === "month"
+                  ? "bg-foreground text-background"
+                  : "bg-transparent text-muted-foreground hover:bg-muted"
+              )}
+            >
+              Month
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("rolling12")}
+              className={cn(
+                "px-3 text-xs font-medium transition-colors border-l border-input",
+                viewMode === "rolling12"
+                  ? "bg-foreground text-background"
+                  : "bg-transparent text-muted-foreground hover:bg-muted"
+              )}
+            >
+              12-Month
+            </button>
+          </div>
+
+          {/* < > month navigation */}
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={handlePrevMonth}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+
           <Select
             value={String(selectedMonth)}
             onValueChange={(val) => setSelectedMonth(Number(val))}
           >
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Month" />
             </SelectTrigger>
             <SelectContent>
@@ -326,7 +444,7 @@ export default function MonthlyReportPage() {
             value={String(selectedYear)}
             onValueChange={(val) => setSelectedYear(Number(val))}
           >
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[100px]">
               <SelectValue placeholder="Year" />
             </SelectTrigger>
             <SelectContent>
@@ -337,6 +455,10 @@ export default function MonthlyReportPage() {
               ))}
             </SelectContent>
           </Select>
+
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleNextMonth}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -417,7 +539,9 @@ export default function MonthlyReportPage() {
       {/* Stacked Bar Chart - Daily Losses by Category */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Daily Losses by Category</CardTitle>
+          <CardTitle className="text-sm">
+            {viewMode === "rolling12" ? "Monthly Losses by Category" : "Daily Losses by Category"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
@@ -443,7 +567,9 @@ export default function MonthlyReportPage() {
       {/* Line Chart - Daily Production vs BAR */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Daily Production vs BAR</CardTitle>
+          <CardTitle className="text-sm">
+            {viewMode === "rolling12" ? "Monthly Production vs BAR" : "Daily Production vs BAR"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>

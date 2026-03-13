@@ -657,6 +657,86 @@ export async function getDailyLogsByDateRange(
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// ─── Bulk Day Operations ─────────────────────────────────────────
+
+export async function bulkUpdateDayStatus(
+  ids: string[],
+  status: "open" | "closed"
+): Promise<void> {
+  if (ids.length === 0) return;
+  const client = sb();
+  if (client) {
+    const { error } = await client
+      .from("daily_logs")
+      .update({ status })
+      .in("id", ids);
+    if (error) throw error;
+    return;
+  }
+  const logs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
+  for (const log of logs) {
+    if (ids.includes(log.id)) {
+      log.status = status;
+      log.updatedAt = now();
+    }
+  }
+  setStore(STORAGE_KEYS.dailyLogs, logs);
+}
+
+export async function deleteDailyLog(id: string): Promise<void> {
+  const client = sb();
+  if (client) {
+    // Delete associated loss entries first
+    const { error: entryErr } = await client
+      .from("loss_entries")
+      .delete()
+      .eq("daily_log_id", id);
+    if (entryErr) throw entryErr;
+    const { error } = await client.from("daily_logs").delete().eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const logs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
+  const log = logs.find((l) => l.id === id);
+  if (log) {
+    const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+    setStore(
+      STORAGE_KEYS.lossEntries,
+      entries.filter((e) => e.dailyLogId !== id)
+    );
+  }
+  setStore(
+    STORAGE_KEYS.dailyLogs,
+    logs.filter((l) => l.id !== id)
+  );
+}
+
+export async function bulkDeleteDailyLogs(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const client = sb();
+  if (client) {
+    const { error: entryErr } = await client
+      .from("loss_entries")
+      .delete()
+      .in("daily_log_id", ids);
+    if (entryErr) throw entryErr;
+    const { error } = await client.from("daily_logs").delete().in("id", ids);
+    if (error) throw error;
+    return;
+  }
+  const logs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
+  const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+  const idSet = new Set(ids);
+  setStore(
+    STORAGE_KEYS.lossEntries,
+    entries.filter((e) => !idSet.has(e.dailyLogId))
+  );
+  setStore(
+    STORAGE_KEYS.dailyLogs,
+    logs.filter((l) => !idSet.has(l.id))
+  );
+}
+
 // ─── Loss Entries ────────────────────────────────────────────────
 
 export async function getLossEntries(date?: string): Promise<LossEntry[]> {

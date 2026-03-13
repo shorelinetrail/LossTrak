@@ -17,6 +17,9 @@ import {
   createLossEntry,
   updateLossEntry,
   deleteLossEntry,
+  deleteDailyLog,
+  bulkUpdateDayStatus,
+  bulkDeleteDailyLogs,
   getRecentHistory,
   type DaySnapshot,
 } from "@/lib/store";
@@ -194,6 +197,7 @@ export default function DailyPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // ── Selected-day entry state ─────────────────────────────────
   // null = table view, Date = entry form for that date
@@ -684,6 +688,80 @@ export default function DailyPage() {
     setSelectedDate(date);
   }, []);
 
+  // ── Bulk actions ───────────────────────────────────────────────
+  const toggleSelectId = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredLogs.length) return new Set();
+      return new Set(filteredLogs.map((l) => l.id));
+    });
+  }, [filteredLogs]);
+
+  const handleBulkClose = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await bulkUpdateDayStatus(ids, "closed");
+      toast.success(`Closed ${ids.length} day${ids.length > 1 ? "s" : ""}.`);
+      setSelectedIds(new Set());
+      await refreshLogTable();
+    } catch (err) {
+      console.error("Bulk close failed:", err);
+      toast.error("Failed to close selected days.");
+    }
+  }, [selectedIds, refreshLogTable]);
+
+  const handleBulkReopen = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      await bulkUpdateDayStatus(ids, "open");
+      toast.success(`Reopened ${ids.length} day${ids.length > 1 ? "s" : ""}.`);
+      setSelectedIds(new Set());
+      await refreshLogTable();
+    } catch (err) {
+      console.error("Bulk reopen failed:", err);
+      toast.error("Failed to reopen selected days.");
+    }
+  }, [selectedIds, refreshLogTable]);
+
+  const handleBulkDelete = useCallback(async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    if (!confirm(`Delete ${ids.length} day${ids.length > 1 ? "s" : ""} and all their loss entries? This cannot be undone.`)) return;
+    try {
+      await bulkDeleteDailyLogs(ids);
+      toast.success(`Deleted ${ids.length} day${ids.length > 1 ? "s" : ""}.`);
+      setSelectedIds(new Set());
+      await refreshLogTable();
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      toast.error("Failed to delete selected days.");
+    }
+  }, [selectedIds, refreshLogTable]);
+
+  const handleDeleteDay = useCallback(async () => {
+    if (!dailyLog) return;
+    if (!confirm(`Delete this day (${dateKey}) and all its loss entries? This cannot be undone.`)) return;
+    try {
+      await deleteDailyLog(dailyLog.id);
+      toast.success("Day deleted.");
+      setSelectedDate(null);
+      await refreshLogTable();
+    } catch (err) {
+      console.error("Failed to delete day:", err);
+      toast.error("Failed to delete day.");
+    }
+  }, [dailyLog, dateKey, refreshLogTable]);
+
   // ── Sort icon helper ─────────────────────────────────────────
   const SortIcon = ({ col }: { col: SortColumn }) => {
     if (sortCol !== col) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
@@ -787,6 +865,29 @@ export default function DailyPage() {
               </span>
             </div>
 
+            {/* Bulk action bar */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2 mb-2 px-1 py-1.5 bg-muted/50 rounded-md">
+                <span className="text-xs font-medium ml-1">
+                  {selectedIds.size} selected
+                </span>
+                <div className="flex items-center gap-1 ml-auto">
+                  <Button variant="outline" size="sm" className="h-6 text-xs px-2" onClick={handleBulkClose}>
+                    <Lock className="h-3 w-3 mr-1" />
+                    Close
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-6 text-xs px-2" onClick={handleBulkReopen}>
+                    <Unlock className="h-3 w-3 mr-1" />
+                    Reopen
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-6 text-xs px-2 text-destructive hover:text-destructive" onClick={handleBulkDelete}>
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Table */}
             {filteredLogs.length === 0 ? (
               <div className="text-center py-6 text-sm text-muted-foreground">
@@ -799,6 +900,15 @@ export default function DailyPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-8 h-8 text-center">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer"
+                          checked={selectedIds.size === filteredLogs.length && filteredLogs.length > 0}
+                          ref={(el) => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < filteredLogs.length; }}
+                          onChange={toggleSelectAll}
+                        />
+                      </TableHead>
                       {(
                         [
                           ["date", "Date", "text-left"],
@@ -830,9 +940,17 @@ export default function DailyPage() {
                     {filteredLogs.map((log) => (
                       <TableRow
                         key={log.date}
-                        className="cursor-pointer"
+                        className={cn("cursor-pointer", selectedIds.has(log.id) && "bg-muted/50")}
                         onClick={() => handleOpenDate(parseISO(log.date))}
                       >
+                        <TableCell className="text-center py-1.5" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-input accent-primary cursor-pointer"
+                            checked={selectedIds.has(log.id)}
+                            onChange={() => toggleSelectId(log.id)}
+                          />
+                        </TableCell>
                         <TableCell className="text-xs py-1.5 font-medium">
                           {format(parseISO(log.date), "EEE, MMM d, yyyy")}
                         </TableCell>
@@ -1409,15 +1527,26 @@ export default function DailyPage() {
                       ? "Ready to close."
                       : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining.`}
                   </p>
-                  <Button
-                    size="sm"
-                    onClick={handleCloseDay}
-                    disabled={!isBalanced || saving}
-                    className={cn("h-7 text-xs", isBalanced && "bg-green-600 hover:bg-green-700 text-white")}
-                  >
-                    <CheckCircle2 className="h-3 w-3 mr-1" />
-                    Close Day
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={handleDeleteDay}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete Day
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleCloseDay}
+                      disabled={!isBalanced || saving}
+                      className={cn("h-7 text-xs", isBalanced && "bg-green-600 hover:bg-green-700 text-white")}
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Close Day
+                    </Button>
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -1432,10 +1561,16 @@ export default function DailyPage() {
                     <Lock className="h-4 w-4" />
                     <p className="text-sm font-medium">Day closed — read-only.</p>
                   </div>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleReopenDay} disabled={saving}>
-                    <Unlock className="h-3.5 w-3.5 mr-1" />
-                    Reopen
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleReopenDay} disabled={saving}>
+                      <Unlock className="h-3.5 w-3.5 mr-1" />
+                      Reopen
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={handleDeleteDay}>
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      Delete Day
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
