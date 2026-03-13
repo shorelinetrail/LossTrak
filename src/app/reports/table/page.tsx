@@ -123,17 +123,17 @@ export default function TableReportPage() {
   const toggleSection = useCallback((key: SectionKey, e?: React.MouseEvent) => {
     const multiSelect = e?.shiftKey || e?.ctrlKey || e?.metaKey;
     setOpenSections((prev) => {
-      const isOpening = !prev[key];
       if (multiSelect) {
         // Shift/Ctrl: toggle just this section, keep others as-is
-        return { ...prev, [key]: isOpening };
+        return { ...prev, [key]: !prev[key] };
       }
-      if (isOpening) {
-        // Close all others, open only the clicked one
+      const othersOpen = Object.entries(prev).some(([k, v]) => k !== key && v);
+      if (othersOpen) {
+        // Other sections are open: close them all, keep/open only this one
         return { summary: false, category: false, subcategory: false, breakdown: false, [key]: true };
       }
-      // Allow closing the current section
-      return { ...prev, [key]: false };
+      // This is the only section open (or none are): toggle it
+      return { ...prev, [key]: !prev[key] };
     });
   }, []);
 
