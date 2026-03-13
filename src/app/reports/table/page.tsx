@@ -77,7 +77,7 @@ function CollapsibleCard({
 }: {
   title: string;
   open: boolean;
-  onToggle: () => void;
+  onToggle: (e: React.MouseEvent) => void;
   children: React.ReactNode;
 }) {
   return (
@@ -115,13 +115,26 @@ export default function TableReportPage() {
 
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
-    category: true,
-    subcategory: true,
-    breakdown: true,
+    category: false,
+    subcategory: false,
+    breakdown: false,
   });
 
-  const toggleSection = useCallback((key: SectionKey) => {
-    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const toggleSection = useCallback((key: SectionKey, e?: React.MouseEvent) => {
+    const multiSelect = e?.shiftKey || e?.ctrlKey || e?.metaKey;
+    setOpenSections((prev) => {
+      const isOpening = !prev[key];
+      if (multiSelect) {
+        // Shift/Ctrl: toggle just this section, keep others as-is
+        return { ...prev, [key]: isOpening };
+      }
+      if (isOpening) {
+        // Close all others, open only the clicked one
+        return { summary: false, category: false, subcategory: false, breakdown: false, [key]: true };
+      }
+      // Allow closing the current section
+      return { ...prev, [key]: false };
+    });
   }, []);
 
   const yearOptions = useMemo(() => {
@@ -453,7 +466,7 @@ export default function TableReportPage() {
             <button
               key={key}
               type="button"
-              onClick={() => toggleSection(key)}
+              onClick={(e) => toggleSection(key, e)}
               className={cn(
                 "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
                 openSections[key]
@@ -471,7 +484,7 @@ export default function TableReportPage() {
         <CollapsibleCard
           title="Production Summary"
           open={openSections.summary}
-          onToggle={() => toggleSection("summary")}
+          onToggle={(e) => toggleSection("summary", e)}
         >
           <Table>
             <TableHeader>
@@ -531,7 +544,7 @@ export default function TableReportPage() {
         <CollapsibleCard
           title="Losses by Category"
           open={openSections.category}
-          onToggle={() => toggleSection("category")}
+          onToggle={(e) => toggleSection("category", e)}
         >
           {categorySummary.every((r) => r.total === 0) ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
@@ -594,7 +607,7 @@ export default function TableReportPage() {
         <CollapsibleCard
           title="Losses by Subcategory"
           open={openSections.subcategory}
-          onToggle={() => toggleSection("subcategory")}
+          onToggle={(e) => toggleSection("subcategory", e)}
         >
           {subcategorySummary.every((g) => g.subcategories.every((s) => s.total === 0)) ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
@@ -655,7 +668,7 @@ export default function TableReportPage() {
         <CollapsibleCard
           title={`${viewMode === "month" ? "Daily" : "Monthly"} Breakdown`}
           open={openSections.breakdown}
-          onToggle={() => toggleSection("breakdown")}
+          onToggle={(e) => toggleSection("breakdown", e)}
         >
           <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             <Table>
