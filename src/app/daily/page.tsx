@@ -1469,7 +1469,7 @@ export default function DailyPage() {
                           )}
 
                           {/* Amount with inline unit toggle */}
-                          <div className="shrink-0 w-[120px] md:w-[140px]">
+                          <div className="relative shrink-0 w-[120px] md:w-[140px]">
                             <div className="relative flex items-center">
                               <Input
                                 type="number"
@@ -1501,7 +1501,7 @@ export default function DailyPage() {
                               </button>
                             </div>
                             {unit !== "production" && entry.amount > 0 && (
-                              <p className="text-[9px] text-muted-foreground truncate mt-0.5">
+                              <p className="absolute left-0 top-full text-[9px] text-muted-foreground truncate mt-0.5 w-full">
                                 = {entry.amount.toLocaleString()} {productionUnit}
                               </p>
                             )}
