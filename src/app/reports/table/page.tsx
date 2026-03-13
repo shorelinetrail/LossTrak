@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   getDailyLogsByDateRange,
   getAllLossEntries,
@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import {
   format,
   startOfMonth,
@@ -42,6 +42,7 @@ import {
   eachDayOfInterval,
   eachMonthOfInterval,
   parseISO,
+  isValid,
   getMonth,
   getYear,
 } from "date-fns";
@@ -49,17 +50,54 @@ import { cn } from "@/lib/utils";
 
 type ViewMode = "day" | "month" | "year";
 
+type SectionKey = "summary" | "category" | "subcategory" | "breakdown";
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Categories considered "planned" for CTP calculation
 const GRADE_SLATE_NAME = "Grade Slate";
 const PLANNED_CATEGORY_NAME = "Business";
 
 function fmtNum(n: number) {
-  return n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return n.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function fmtPct(numerator: number, denominator: number) {
+  if (denominator <= 0) return "0.0%";
+  return ((numerator / denominator) * 100).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+}
+
+function CollapsibleCard({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        className="cursor-pointer select-none"
+        onClick={onToggle}
+      >
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">{title}</CardTitle>
+          {open ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </CardHeader>
+      {open && <CardContent>{children}</CardContent>}
+    </Card>
+  );
 }
 
 export default function TableReportPage() {
@@ -75,30 +113,43 @@ export default function TableReportPage() {
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
   const [productionUnit, setProductionUnit] = useState<string>("tonnes");
 
+  const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
+    summary: true,
+    category: true,
+    subcategory: true,
+    breakdown: true,
+  });
+
+  const toggleSection = useCallback((key: SectionKey) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
   const yearOptions = useMemo(() => {
     const currentYear = getYear(new Date());
     return Array.from({ length: 10 }, (_, i) => currentYear - i);
   }, []);
 
-  // Compute date range based on view mode
+  // Safely parse the selected day, falling back to today
+  const safeSelectedDay = useMemo(() => {
+    const parsed = parseISO(selectedDay);
+    return isValid(parsed) ? parsed : new Date();
+  }, [selectedDay]);
+
   const { rangeStart, rangeEnd } = useMemo(() => {
     if (viewMode === "day") {
-      const d = parseISO(selectedDay);
-      return { rangeStart: d, rangeEnd: d };
+      return { rangeStart: safeSelectedDay, rangeEnd: safeSelectedDay };
     }
     if (viewMode === "month") {
       const anchor = new Date(selectedYear, selectedMonth, 1);
       return { rangeStart: startOfMonth(anchor), rangeEnd: endOfMonth(anchor) };
     }
-    // year
     const anchor = new Date(selectedYear, 0, 1);
     return { rangeStart: startOfYear(anchor), rangeEnd: endOfYear(anchor) };
-  }, [viewMode, selectedDay, selectedMonth, selectedYear]);
+  }, [viewMode, safeSelectedDay, selectedMonth, selectedYear]);
 
-  // Navigation helpers
   const handlePrev = () => {
     if (viewMode === "day") {
-      const d = parseISO(selectedDay);
+      const d = new Date(safeSelectedDay);
       d.setDate(d.getDate() - 1);
       setSelectedDay(format(d, "yyyy-MM-dd"));
     } else if (viewMode === "month") {
@@ -115,7 +166,7 @@ export default function TableReportPage() {
 
   const handleNext = () => {
     if (viewMode === "day") {
-      const d = parseISO(selectedDay);
+      const d = new Date(safeSelectedDay);
       d.setDate(d.getDate() + 1);
       setSelectedDay(format(d, "yyyy-MM-dd"));
     } else if (viewMode === "month") {
@@ -130,7 +181,6 @@ export default function TableReportPage() {
     }
   };
 
-  // Load static data
   useEffect(() => {
     async function load() {
       const unit = await getProductionUnit();
@@ -143,7 +193,6 @@ export default function TableReportPage() {
     load();
   }, []);
 
-  // Fetch data for range
   useEffect(() => {
     async function load() {
       const startStr = format(rangeStart, "yyyy-MM-dd");
@@ -160,20 +209,6 @@ export default function TableReportPage() {
     load();
   }, [rangeStart, rangeEnd]);
 
-  // Maps
-  const categoryMap = useMemo(() => {
-    const map: Record<string, LossCategory> = {};
-    categories.forEach((cat) => { map[cat.id] = cat; });
-    return map;
-  }, [categories]);
-
-  const subcategoryMap = useMemo(() => {
-    const map: Record<string, LossSubcategory> = {};
-    subcategories.forEach((sub) => { map[sub.id] = sub; });
-    return map;
-  }, [subcategories]);
-
-  // Aggregated totals
   const totalProduction = useMemo(
     () => dailyLogs.reduce((sum, log) => sum + (log.production ?? 0), 0),
     [dailyLogs]
@@ -187,7 +222,6 @@ export default function TableReportPage() {
     [allLossEntries]
   );
 
-  // Grade Slate + Business (planned) totals for CTP
   const gradeSlateId = useMemo(
     () => categories.find((c) => c.name === GRADE_SLATE_NAME)?.id,
     [categories]
@@ -215,7 +249,6 @@ export default function TableReportPage() {
 
   const ctp = totalBAR - gradeSlateLoss - plannedLoss;
 
-  // Category rows: shutdown, slowdown, total per category
   const categorySummary = useMemo(() => {
     return categories.map((cat) => {
       const catEntries = allLossEntries.filter((e) => e.categoryId === cat.id);
@@ -230,7 +263,6 @@ export default function TableReportPage() {
     });
   }, [categories, allLossEntries]);
 
-  // Subcategory rows grouped by category
   const subcategorySummary = useMemo(() => {
     return categories.map((cat) => {
       const catEntries = allLossEntries.filter((e) => e.categoryId === cat.id);
@@ -250,7 +282,6 @@ export default function TableReportPage() {
     });
   }, [categories, subcategories, allLossEntries]);
 
-  // Time-period breakdown rows for month/year views
   const periodBreakdown = useMemo(() => {
     if (viewMode === "day") return [];
 
@@ -276,10 +307,7 @@ export default function TableReportPage() {
           .reduce((sum, e) => sum + (e.amount ?? 0), 0);
         return {
           label: format(day, "dd MMM"),
-          bar,
-          production,
-          shutdown,
-          slowdown,
+          bar, production, shutdown, slowdown,
           totalLoss: shutdown + slowdown,
           ctp: bar - gs - pl,
         };
@@ -308,52 +336,24 @@ export default function TableReportPage() {
         .reduce((s, e) => s + (e.amount ?? 0), 0);
       return {
         label: format(month, "MMM yyyy"),
-        bar,
-        production,
-        shutdown,
-        slowdown,
+        bar, production, shutdown, slowdown,
         totalLoss: shutdown + slowdown,
         ctp: bar - gs - pl,
       };
     });
   }, [viewMode, rangeStart, rangeEnd, dailyLogs, allLossEntries, gradeSlateId, plannedCategoryId]);
 
-  // Per-category breakdown by time period (for the detailed table)
-  const categoryPeriodBreakdown = useMemo(() => {
-    if (viewMode === "day") return [];
-
-    const periods = viewMode === "month"
-      ? eachDayOfInterval({ start: rangeStart, end: rangeEnd })
-      : eachMonthOfInterval({ start: rangeStart, end: rangeEnd });
-
-    return categories.map((cat) => {
-      const rows = periods.map((period) => {
-        const key = viewMode === "month"
-          ? format(period, "yyyy-MM-dd")
-          : format(period, "yyyy-MM");
-        const label = viewMode === "month"
-          ? format(period, "dd MMM")
-          : format(period, "MMM yyyy");
-        const entries = allLossEntries.filter((e) =>
-          e.categoryId === cat.id && (viewMode === "month" ? e.date === key : e.date.startsWith(key))
-        );
-        const shutdown = entries
-          .filter((e) => e.lossType === "shutdown")
-          .reduce((s, e) => s + (e.amount ?? 0), 0);
-        const slowdown = entries
-          .filter((e) => e.lossType === "slowdown")
-          .reduce((s, e) => s + (e.amount ?? 0), 0);
-        return { label, shutdown, slowdown, total: shutdown + slowdown };
-      });
-      return { categoryId: cat.id, categoryName: cat.name, rows };
-    });
-  }, [viewMode, rangeStart, rangeEnd, categories, allLossEntries]);
-
   const periodLabel = useMemo(() => {
-    if (viewMode === "day") return format(parseISO(selectedDay), "dd MMMM yyyy");
+    if (viewMode === "day") return format(safeSelectedDay, "dd MMMM yyyy");
     if (viewMode === "month") return `${MONTHS[selectedMonth]} ${selectedYear}`;
     return String(selectedYear);
-  }, [viewMode, selectedDay, selectedMonth, selectedYear]);
+  }, [viewMode, safeSelectedDay, selectedMonth, selectedYear]);
+
+  const handleDateChange = (value: string) => {
+    if (value && isValid(parseISO(value))) {
+      setSelectedDay(value);
+    }
+  };
 
   return (
     <div className="space-y-3 p-4">
@@ -384,7 +384,6 @@ export default function TableReportPage() {
             ))}
           </div>
 
-          {/* Navigation */}
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={handlePrev}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
@@ -393,7 +392,7 @@ export default function TableReportPage() {
             <input
               type="date"
               value={selectedDay}
-              onChange={(e) => setSelectedDay(e.target.value)}
+              onChange={(e) => handleDateChange(e.target.value)}
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             />
           )}
@@ -441,12 +440,39 @@ export default function TableReportPage() {
         </div>
       </div>
 
-      {/* Summary KPI Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Production Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {/* Section toggles */}
+      <div className="flex flex-wrap gap-1.5">
+        {([
+          ["summary", "Production Summary"],
+          ["category", "Losses by Category"],
+          ["subcategory", "Losses by Subcategory"],
+          ["breakdown", viewMode === "month" ? "Daily Breakdown" : viewMode === "year" ? "Monthly Breakdown" : ""],
+        ] as [SectionKey, string][])
+          .filter(([, label]) => label !== "")
+          .map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleSection(key)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium border transition-colors",
+                openSections[key]
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-transparent text-muted-foreground border-input hover:bg-muted"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+      </div>
+
+      {/* Production Summary */}
+      {openSections.summary && (
+        <CollapsibleCard
+          title="Production Summary"
+          open={openSections.summary}
+          onToggle={() => toggleSection("summary")}
+        >
           <Table>
             <TableHeader>
               <TableRow>
@@ -483,7 +509,7 @@ export default function TableReportPage() {
                 <TableCell className="font-medium">Utilization (Production / BAR)</TableCell>
                 <TableCell className="text-right">
                   <Badge variant={totalBAR > 0 && (totalProduction / totalBAR) >= 0.8 ? "default" : "destructive"}>
-                    {totalBAR > 0 ? ((totalProduction / totalBAR) * 100).toFixed(1) : "0.0"}%
+                    {fmtPct(totalProduction, totalBAR)}
                   </Badge>
                 </TableCell>
               </TableRow>
@@ -491,21 +517,22 @@ export default function TableReportPage() {
                 <TableCell className="font-medium">CTP Utilization (Production / CTP)</TableCell>
                 <TableCell className="text-right">
                   <Badge variant={ctp > 0 && (totalProduction / ctp) >= 0.8 ? "default" : "destructive"}>
-                    {ctp > 0 ? ((totalProduction / ctp) * 100).toFixed(1) : "0.0"}%
+                    {fmtPct(totalProduction, ctp)}
                   </Badge>
                 </TableCell>
               </TableRow>
             </TableBody>
           </Table>
-        </CardContent>
-      </Card>
+        </CollapsibleCard>
+      )}
 
       {/* Losses by Category */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Losses by Category</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {openSections.category && (
+        <CollapsibleCard
+          title="Losses by Category"
+          open={openSections.category}
+          onToggle={() => toggleSection("category")}
+        >
           {categorySummary.every((r) => r.total === 0) ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No loss data for this period.
@@ -533,7 +560,7 @@ export default function TableReportPage() {
                       <TableCell className="text-right font-semibold">{fmtNum(row.total)}</TableCell>
                       <TableCell className="text-right">
                         <Badge variant={totalLosses > 0 && row.total / totalLosses > 0.25 ? "destructive" : "secondary"}>
-                          {totalLosses > 0 ? ((row.total / totalLosses) * 100).toFixed(1) : "0.0"}%
+                          {fmtPct(row.total, totalLosses)}
                         </Badge>
                       </TableCell>
                     </TableRow>
@@ -547,80 +574,80 @@ export default function TableReportPage() {
                     {fmtNum(categorySummary.reduce((s, r) => s + r.slowdown, 0))}
                   </TableCell>
                   <TableCell className="text-right">{fmtNum(totalLosses)}</TableCell>
-                  <TableCell className="text-right"><Badge>100%</Badge></TableCell>
+                  <TableCell className="text-right"><Badge>100.0%</Badge></TableCell>
                 </TableRow>
               </TableBody>
             </Table>
           )}
-        </CardContent>
-      </Card>
+        </CollapsibleCard>
+      )}
 
       {/* Losses by Subcategory */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Losses by Subcategory</CardTitle>
-        </CardHeader>
-        <CardContent>
+      {openSections.subcategory && (
+        <CollapsibleCard
+          title="Losses by Subcategory"
+          open={openSections.subcategory}
+          onToggle={() => toggleSection("subcategory")}
+        >
           {subcategorySummary.every((g) => g.subcategories.every((s) => s.total === 0)) ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No subcategory loss data for this period.
             </p>
           ) : (
-            <div className="space-y-4">
-              {subcategorySummary
-                .filter((g) => g.subcategories.some((s) => s.total > 0))
-                .map((group) => (
-                  <div key={group.categoryId}>
-                    <h4 className="font-semibold text-sm mb-2">{group.categoryName}</h4>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Subcategory</TableHead>
-                          <TableHead className="text-right">Shutdown</TableHead>
-                          <TableHead className="text-right">Slowdown</TableHead>
-                          <TableHead className="text-right">Total</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {group.subcategories
-                          .filter((s) => s.total > 0)
-                          .sort((a, b) => b.total - a.total)
-                          .map((sub) => (
-                            <TableRow key={sub.id}>
-                              <TableCell className="pl-6">{sub.name}</TableCell>
-                              <TableCell className="text-right">{fmtNum(sub.shutdown)}</TableCell>
-                              <TableCell className="text-right">{fmtNum(sub.slowdown)}</TableCell>
-                              <TableCell className="text-right font-medium">{fmtNum(sub.total)}</TableCell>
-                            </TableRow>
-                          ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Period Breakdown Table (month/year views only) */}
-      {viewMode !== "day" && periodBreakdown.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              {viewMode === "month" ? "Daily" : "Monthly"} Breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{viewMode === "month" ? "Day" : "Month"}</TableHead>
-                  <TableHead className="text-right">BAR</TableHead>
-                  <TableHead className="text-right">Production</TableHead>
-                  <TableHead className="text-right">CTP</TableHead>
+                  <TableHead>Subcategory</TableHead>
                   <TableHead className="text-right">Shutdown</TableHead>
                   <TableHead className="text-right">Slowdown</TableHead>
-                  <TableHead className="text-right">Total Loss</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {subcategorySummary
+                  .filter((g) => g.subcategories.some((s) => s.total > 0))
+                  .flatMap((group) => [
+                    <TableRow key={`cat-${group.categoryId}`} className="bg-muted/50">
+                      <TableCell colSpan={4} className="font-semibold text-sm py-2">
+                        {group.categoryName}
+                      </TableCell>
+                    </TableRow>,
+                    ...group.subcategories
+                      .filter((s) => s.total > 0)
+                      .sort((a, b) => b.total - a.total)
+                      .map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="pl-6">{sub.name}</TableCell>
+                          <TableCell className="text-right">{fmtNum(sub.shutdown)}</TableCell>
+                          <TableCell className="text-right">{fmtNum(sub.slowdown)}</TableCell>
+                          <TableCell className="text-right font-medium">{fmtNum(sub.total)}</TableCell>
+                        </TableRow>
+                      )),
+                  ])}
+              </TableBody>
+            </Table>
+          )}
+        </CollapsibleCard>
+      )}
+
+      {/* Period Breakdown (month/year views only) */}
+      {viewMode !== "day" && openSections.breakdown && periodBreakdown.length > 0 && (
+        <CollapsibleCard
+          title={`${viewMode === "month" ? "Daily" : "Monthly"} Breakdown`}
+          open={openSections.breakdown}
+          onToggle={() => toggleSection("breakdown")}
+        >
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="sticky top-0 bg-card">{viewMode === "month" ? "Day" : "Month"}</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">BAR</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">Production</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">CTP</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">Shutdown</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">Slowdown</TableHead>
+                  <TableHead className="sticky top-0 bg-card text-right">Total Loss</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -635,7 +662,6 @@ export default function TableReportPage() {
                     <TableCell className="text-right font-semibold">{fmtNum(row.totalLoss)}</TableCell>
                   </TableRow>
                 ))}
-                {/* Totals row */}
                 <TableRow className="font-bold border-t-2">
                   <TableCell>Total</TableCell>
                   <TableCell className="text-right">{fmtNum(totalBAR)}</TableCell>
@@ -651,8 +677,8 @@ export default function TableReportPage() {
                 </TableRow>
               </TableBody>
             </Table>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
       )}
     </div>
   );
