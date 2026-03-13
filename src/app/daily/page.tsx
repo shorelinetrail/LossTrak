@@ -1125,6 +1125,7 @@ export default function DailyPage() {
                   placeholder={`Enter production in ${productionUnit}`}
                   value={productionInput}
                   onChange={(e) => setProductionInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                 />
               </div>
               <div className="space-y-1">
@@ -1333,6 +1334,7 @@ export default function DailyPage() {
                 className="h-7 text-xs max-w-[160px]"
                 value={productionInput}
                 onChange={(e) => handleUpdateProduction(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
               />
             </div>
           )}
@@ -1474,7 +1476,7 @@ export default function DailyPage() {
                                 min="0"
                                 step="any"
                                 placeholder="0"
-                                className="pr-10"
+                                className="pr-12"
                                 style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
                                 value={displayValue}
                                 onChange={(e) => {
@@ -1483,11 +1485,12 @@ export default function DailyPage() {
                                   handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100);
                                 }}
                                 disabled={isClosed}
+                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                               />
                               <button
                                 type="button"
                                 disabled={isClosed}
-                                className="absolute right-1 h-5 px-1.5 rounded text-[9px] font-medium text-muted-foreground bg-muted hover:bg-muted-foreground/20 transition-colors"
+                                className="absolute right-1 h-5 w-[42px] text-center rounded text-[9px] font-medium text-muted-foreground bg-muted hover:bg-muted-foreground/20 transition-colors"
                                 onClick={() => {
                                   const order: AmountUnit[] = ["production", "hours", "days"];
                                   const next = order[(order.indexOf(unit) + 1) % order.length];
