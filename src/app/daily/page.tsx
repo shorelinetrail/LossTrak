@@ -1053,6 +1053,7 @@ export default function DailyPage() {
           productionUnit={productionUnit}
           categories={categories}
           subcategories={subcategories}
+          existingLogs={allLogs}
         />
       </div>
     );

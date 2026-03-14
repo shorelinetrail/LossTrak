@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { format, eachDayOfInterval } from "date-fns";
 import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
@@ -8,7 +8,6 @@ import {
   createDailyLog,
   updateDailyLog,
   createLossEntry,
-  getDailyLogsByDateRange,
 } from "@/lib/store";
 import type {
   LossCategory,
@@ -66,6 +65,7 @@ interface BulkEntryDialogProps {
   productionUnit: string;
   categories: LossCategory[];
   subcategories: LossSubcategory[];
+  existingLogs: DailyLog[];
 }
 
 // ─── Component ──────────────────────────────────────────────────
@@ -78,33 +78,42 @@ export function BulkEntryDialog({
   productionUnit,
   categories,
   subcategories,
+  existingLogs,
 }: BulkEntryDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [rows, setRows] = useState<BulkDayRow[]>([]);
   const [conflictMode, setConflictMode] = useState<"skip" | "overwrite">("skip");
-  const [applyToAll, setApplyToAll] = useState(false);
+  const [sameProduction, setSameProduction] = useState(false);
+  const [sameLosses, setSameLosses] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
 
   const existingCount = rows.filter((r) => r.existingLog).length;
 
-  // Reset state when dialog opens/closes
+  // Pre-index existing logs by date
+  const existingMap = useMemo(
+    () => new Map(existingLogs.map((l) => [l.date, l])),
+    [existingLogs]
+  );
+
+  // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
       setStep(1);
       setDateRange(undefined);
       setRows([]);
       setConflictMode("skip");
-      setApplyToAll(false);
+      setSameProduction(false);
+      setSameLosses(false);
       setSaving(false);
       setSavedCount(0);
     }
   }, [open]);
 
-  // ── Step 1 → Step 2 transition ──────────────────────────────
+  // ── Step 1 → Step 2 transition (synchronous — no DB call) ───
 
-  const handleContinue = useCallback(async () => {
+  const handleContinue = useCallback(() => {
     if (!dateRange?.from || !dateRange?.to) return;
 
     const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -112,18 +121,6 @@ export function BulkEntryDialog({
       toast.error("Please select 31 days or fewer.");
       return;
     }
-
-    const startStr = format(dateRange.from, "yyyy-MM-dd");
-    const endStr = format(dateRange.to, "yyyy-MM-dd");
-
-    let existingLogs: DailyLog[] = [];
-    try {
-      existingLogs = await getDailyLogsByDateRange(startStr, endStr);
-    } catch {
-      // proceed with none
-    }
-
-    const existingMap = new Map(existingLogs.map((l) => [l.date, l]));
 
     setRows(
       days.map((d) => {
@@ -139,7 +136,7 @@ export function BulkEntryDialog({
       })
     );
     setStep(2);
-  }, [dateRange]);
+  }, [dateRange, existingMap]);
 
   // ── Row update helpers ────────────────────────────────────────
 
@@ -149,22 +146,29 @@ export function BulkEntryDialog({
         const next = [...prev];
         next[index] = { ...next[index], ...patch };
 
-        // If applyToAll and editing the first row, replicate to others
-        if (applyToAll && index === 0) {
+        // Replicate from row 0 based on toggles
+        if (index === 0) {
           const source = next[0];
           for (let i = 1; i < next.length; i++) {
-            next[i] = {
-              ...next[i],
-              production: source.production,
-              comments: source.comments,
-              losses: source.losses.map((l) => ({ ...l })),
-            };
+            if (sameProduction && (patch.production !== undefined || patch.comments !== undefined)) {
+              next[i] = {
+                ...next[i],
+                production: source.production,
+                comments: source.comments,
+              };
+            }
+            if (sameLosses && patch.losses !== undefined) {
+              next[i] = {
+                ...next[i],
+                losses: source.losses.map((l) => ({ ...l })),
+              };
+            }
           }
         }
         return next;
       });
     },
-    [applyToAll]
+    [sameProduction, sameLosses]
   );
 
   const addLoss = useCallback(
@@ -207,23 +211,35 @@ export function BulkEntryDialog({
     [rows, updateRow]
   );
 
-  // ── Apply-to-all toggle handler ───────────────────────────────
+  // ── Toggle handlers ───────────────────────────────────────────
 
-  const handleApplyToAllChange = useCallback(
+  const handleSameProductionChange = useCallback(
     (checked: boolean) => {
-      setApplyToAll(checked);
+      setSameProduction(checked);
       if (checked && rows.length > 1) {
         setRows((prev) => {
           const source = prev[0];
           return prev.map((row, i) =>
             i === 0
               ? row
-              : {
-                  ...row,
-                  production: source.production,
-                  comments: source.comments,
-                  losses: source.losses.map((l) => ({ ...l })),
-                }
+              : { ...row, production: source.production, comments: source.comments }
+          );
+        });
+      }
+    },
+    [rows.length]
+  );
+
+  const handleSameLossesChange = useCallback(
+    (checked: boolean) => {
+      setSameLosses(checked);
+      if (checked && rows.length > 1) {
+        setRows((prev) => {
+          const source = prev[0];
+          return prev.map((row, i) =>
+            i === 0
+              ? row
+              : { ...row, losses: source.losses.map((l) => ({ ...l })) }
           );
         });
       }
@@ -234,7 +250,6 @@ export function BulkEntryDialog({
   // ── Save ──────────────────────────────────────────────────────
 
   const handleSave = useCallback(async () => {
-    // Validate: at least production on each saveable row
     for (const row of rows) {
       if (row.existingLog && conflictMode === "skip") continue;
       const prod = parseFloat(row.production);
@@ -264,7 +279,6 @@ export function BulkEntryDialog({
         let dailyLogId: string;
 
         if (row.existingLog) {
-          // Overwrite
           await updateDailyLog(row.date, {
             production: prod,
             comments: row.comments,
@@ -283,7 +297,6 @@ export function BulkEntryDialog({
           created++;
         }
 
-        // Create loss entries
         for (const loss of row.losses) {
           const amt = parseFloat(loss.amount);
           if (!loss.categoryId || !loss.subcategoryId || isNaN(amt) || amt <= 0)
@@ -391,13 +404,25 @@ export function BulkEntryDialog({
 
               <div className="flex items-center gap-2">
                 <Switch
-                  id="apply-all"
+                  id="same-prod"
                   size="sm"
-                  checked={applyToAll}
-                  onCheckedChange={handleApplyToAllChange}
+                  checked={sameProduction}
+                  onCheckedChange={handleSameProductionChange}
                 />
-                <Label htmlFor="apply-all" className="text-xs cursor-pointer">
-                  Same values for all days
+                <Label htmlFor="same-prod" className="text-xs cursor-pointer">
+                  Same production
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="same-losses"
+                  size="sm"
+                  checked={sameLosses}
+                  onCheckedChange={handleSameLossesChange}
+                />
+                <Label htmlFor="same-losses" className="text-xs cursor-pointer">
+                  Same losses
                 </Label>
               </div>
 
@@ -425,8 +450,8 @@ export function BulkEntryDialog({
             <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
               <div className="space-y-3 py-1">
                 {rows.map((row, ri) => {
-                  const isDisabled =
-                    applyToAll && ri > 0;
+                  const prodDisabled = sameProduction && ri > 0;
+                  const lossDisabled = sameLosses && ri > 0;
                   const isSkipped =
                     row.existingLog !== null && conflictMode === "skip";
 
@@ -436,9 +461,7 @@ export function BulkEntryDialog({
                       className={`rounded-md border p-2.5 space-y-2 ${
                         isSkipped
                           ? "opacity-40 pointer-events-none"
-                          : isDisabled
-                            ? "opacity-60"
-                            : ""
+                          : ""
                       }`}
                     >
                       {/* Day header row */}
@@ -461,37 +484,37 @@ export function BulkEntryDialog({
                           <Input
                             type="number"
                             placeholder={productionUnit}
-                            className="h-7 text-xs w-[110px]"
+                            className={`h-7 text-xs w-[110px] ${prodDisabled ? "opacity-60" : ""}`}
                             value={row.production}
                             onChange={(e) =>
                               updateRow(
-                                applyToAll ? 0 : ri,
+                                sameProduction ? 0 : ri,
                                 { production: e.target.value }
                               )
                             }
-                            disabled={isDisabled || isSkipped}
+                            disabled={prodDisabled || isSkipped}
                           />
                           <Label className="text-[10px] text-muted-foreground shrink-0">
                             Notes
                           </Label>
                           <Input
                             placeholder="Comments..."
-                            className="h-7 text-xs flex-1 min-w-0"
+                            className={`h-7 text-xs flex-1 min-w-0 ${prodDisabled ? "opacity-60" : ""}`}
                             value={row.comments}
                             onChange={(e) =>
                               updateRow(
-                                applyToAll ? 0 : ri,
+                                sameProduction ? 0 : ri,
                                 { comments: e.target.value }
                               )
                             }
-                            disabled={isDisabled || isSkipped}
+                            disabled={prodDisabled || isSkipped}
                           />
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-1.5 text-xs shrink-0"
-                            onClick={() => addLoss(applyToAll ? 0 : ri)}
-                            disabled={isDisabled || isSkipped}
+                            className={`h-7 px-1.5 text-xs shrink-0 ${lossDisabled ? "opacity-60" : ""}`}
+                            onClick={() => addLoss(sameLosses ? 0 : ri)}
+                            disabled={lossDisabled || isSkipped}
                           >
                             <Plus className="h-3 w-3 mr-0.5" />
                             Loss
@@ -515,17 +538,17 @@ export function BulkEntryDialog({
                         return (
                           <div
                             key={li}
-                            className="flex items-center gap-1.5 pl-[80px] flex-wrap"
+                            className={`flex items-center gap-1.5 pl-[80px] flex-wrap ${lossDisabled ? "opacity-60" : ""}`}
                           >
                             {/* Category */}
                             <Select
                               value={loss.categoryId}
                               onValueChange={(v) =>
-                                updateLoss(applyToAll ? 0 : ri, li, {
+                                updateLoss(sameLosses ? 0 : ri, li, {
                                   categoryId: v,
                                 })
                               }
-                              disabled={isDisabled || isSkipped}
+                              disabled={lossDisabled || isSkipped}
                             >
                               <SelectTrigger className="h-7 text-xs w-[130px]">
                                 <SelectValue placeholder="Category" />
@@ -549,12 +572,12 @@ export function BulkEntryDialog({
                             <Select
                               value={loss.subcategoryId}
                               onValueChange={(v) =>
-                                updateLoss(applyToAll ? 0 : ri, li, {
+                                updateLoss(sameLosses ? 0 : ri, li, {
                                   subcategoryId: v,
                                 })
                               }
                               disabled={
-                                !loss.categoryId || isDisabled || isSkipped
+                                !loss.categoryId || lossDisabled || isSkipped
                               }
                             >
                               <SelectTrigger className="h-7 text-xs w-[130px]">
@@ -591,13 +614,13 @@ export function BulkEntryDialog({
                                         : "rounded-l-none border-l-0"
                                     }`}
                                     onClick={() =>
-                                      updateLoss(applyToAll ? 0 : ri, li, {
+                                      updateLoss(sameLosses ? 0 : ri, li, {
                                         lossType: lt,
                                       })
                                     }
                                     disabled={
                                       !allowedTypes.includes(lt) ||
-                                      isDisabled ||
+                                      lossDisabled ||
                                       isSkipped
                                     }
                                   >
@@ -614,11 +637,11 @@ export function BulkEntryDialog({
                               className="h-7 text-xs w-[90px]"
                               value={loss.amount}
                               onChange={(e) =>
-                                updateLoss(applyToAll ? 0 : ri, li, {
+                                updateLoss(sameLosses ? 0 : ri, li, {
                                   amount: e.target.value,
                                 })
                               }
-                              disabled={isDisabled || isSkipped}
+                              disabled={lossDisabled || isSkipped}
                             />
 
                             {/* Remove */}
@@ -627,9 +650,9 @@ export function BulkEntryDialog({
                               size="sm"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive shrink-0"
                               onClick={() =>
-                                removeLoss(applyToAll ? 0 : ri, li)
+                                removeLoss(sameLosses ? 0 : ri, li)
                               }
-                              disabled={isDisabled || isSkipped}
+                              disabled={lossDisabled || isSkipped}
                             >
                               <Trash2 className="h-3 w-3" />
                             </Button>
