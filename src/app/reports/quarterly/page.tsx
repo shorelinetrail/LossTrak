@@ -8,6 +8,7 @@ import {
   getSubcategories,
   getProductionUnit,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { DailyLog, LossEntry, LossCategory, LossSubcategory } from "@/types";
 import {
   BarChart,
@@ -75,6 +76,7 @@ function getQuarterStartMonth(quarter: number): number {
 }
 
 export default function QuarterlyReportPage() {
+  const { selectedPlantId } = usePlant();
   const now = new Date();
   const currentQuarter = getQuarter(now);
   const [selectedQuarter, setSelectedQuarter] =
@@ -94,20 +96,22 @@ export default function QuarterlyReportPage() {
 
   useEffect(() => {
     async function load() {
-      const unit = await getProductionUnit();
+      if (!selectedPlantId) return;
+      const unit = await getProductionUnit(selectedPlantId);
       if (unit) setProductionUnit(unit);
 
       const cats = await getCategories();
       setCategories(cats);
 
-      const subs = await getSubcategories();
+      const subs = await getSubcategories(selectedPlantId);
       setSubcategories(subs);
     }
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   useEffect(() => {
     async function load() {
+      if (!selectedPlantId) return;
       const startMonth = getQuarterStartMonth(selectedQuarter);
       const quarterStart = startOfQuarter(
         new Date(selectedYear, startMonth, 1)
@@ -116,10 +120,10 @@ export default function QuarterlyReportPage() {
       const startStr = format(quarterStart, "yyyy-MM-dd");
       const endStr = format(quarterEnd, "yyyy-MM-dd");
 
-      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      const logs = await getDailyLogsByDateRange(selectedPlantId, startStr, endStr);
       setDailyLogs(logs);
 
-      const allLosses = await getAllLossEntries();
+      const allLosses = await getAllLossEntries(selectedPlantId);
       const filtered = allLosses.filter((entry) => {
         const entryDate = parseISO(entry.date);
         return entryDate >= quarterStart && entryDate <= quarterEnd;
@@ -127,7 +131,7 @@ export default function QuarterlyReportPage() {
       setLossEntries(filtered);
     }
     load();
-  }, [selectedQuarter, selectedYear]);
+  }, [selectedPlantId, selectedQuarter, selectedYear]);
 
   const monthsInQuarter = useMemo(() => {
     const startMonth = getQuarterStartMonth(selectedQuarter);
@@ -260,6 +264,14 @@ export default function QuarterlyReportPage() {
       };
     });
   }, [monthsInQuarter, dailyLogs]);
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-3 px-4">
+        <p className="text-sm text-muted-foreground">Select a plant from the top bar to continue.</p>
+      </div>
+    );
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderCustomLabel = (props: any) => {

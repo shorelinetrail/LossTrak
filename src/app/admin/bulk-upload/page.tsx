@@ -12,6 +12,7 @@ import {
   createLossEntry,
   updateDailyLog,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { LossCategory, LossSubcategory, LossEntry } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,6 +65,7 @@ const EXAMPLE_CSV = `date,production,category,subcategory,loss_type,amount,comme
 2026-02-21,1150,External,Feedstock,slowdown,20,Delayed delivery`;
 
 export default function BulkUploadPage() {
+  const { selectedPlantId } = usePlant();
   const [csvText, setCsvText] = useState("");
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
@@ -73,14 +75,15 @@ export default function BulkUploadPage() {
   const [results, setResults] = useState<ImportResult[] | null>(null);
 
   useEffect(() => {
+    if (!selectedPlantId) return;
     const load = async () => {
       setCategories(await getCategories());
-      setSubcategories(await getSubcategories());
-      setBar(await getBarRate());
-      setProductionUnit(await getProductionUnit());
+      setSubcategories(await getSubcategories(selectedPlantId));
+      setBar(await getBarRate(selectedPlantId));
+      setProductionUnit(await getProductionUnit(selectedPlantId));
     };
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   // Build lookup maps (case-insensitive)
   const categoryByName = useMemo(() => {
@@ -216,7 +219,7 @@ export default function BulkUploadPage() {
         const production = rows[0].production;
 
         // Check if daily log exists
-        let log = await getDailyLog(date);
+        let log = await getDailyLog(selectedPlantId!, date);
         let status: ImportResult["status"] = "created";
 
         if (log) {
@@ -228,6 +231,7 @@ export default function BulkUploadPage() {
         } else {
           // Create daily log
           log = await createDailyLog({
+            plantId: selectedPlantId!,
             date,
             production,
             bar,
@@ -260,6 +264,7 @@ export default function BulkUploadPage() {
           if (isDuplicate) continue;
 
           await createLossEntry({
+            plantId: selectedPlantId!,
             dailyLogId: log.id,
             date,
             categoryId: cat.id,
@@ -345,6 +350,17 @@ export default function BulkUploadPage() {
     },
     []
   );
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-4 px-4">
+        <h1 className="text-lg font-semibold tracking-tight">Bulk Upload</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Please select a plant to upload data.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-5xl py-4 px-4 space-y-3">

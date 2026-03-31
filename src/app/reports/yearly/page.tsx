@@ -8,6 +8,7 @@ import {
   getSubcategories,
   getProductionUnit,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { DailyLog, LossEntry, LossCategory, LossSubcategory } from "@/types";
 import {
   BarChart,
@@ -68,6 +69,7 @@ const COLORS = [
 ];
 
 export default function YearlyReportPage() {
+  const { selectedPlantId } = usePlant();
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(getYear(now));
 
@@ -84,29 +86,31 @@ export default function YearlyReportPage() {
 
   useEffect(() => {
     async function load() {
-      const unit = await getProductionUnit();
+      if (!selectedPlantId) return;
+      const unit = await getProductionUnit(selectedPlantId);
       if (unit) setProductionUnit(unit);
 
       const cats = await getCategories();
       setCategories(cats);
 
-      const subs = await getSubcategories();
+      const subs = await getSubcategories(selectedPlantId);
       setSubcategories(subs);
     }
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   useEffect(() => {
     async function load() {
+      if (!selectedPlantId) return;
       const yearStart = startOfYear(new Date(selectedYear, 0, 1));
       const yearEnd = endOfYear(yearStart);
       const startStr = format(yearStart, "yyyy-MM-dd");
       const endStr = format(yearEnd, "yyyy-MM-dd");
 
-      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      const logs = await getDailyLogsByDateRange(selectedPlantId, startStr, endStr);
       setDailyLogs(logs);
 
-      const allLosses = await getAllLossEntries();
+      const allLosses = await getAllLossEntries(selectedPlantId);
       const filtered = allLosses.filter((entry) => {
         const entryDate = parseISO(entry.date);
         return entryDate >= yearStart && entryDate <= yearEnd;
@@ -114,7 +118,7 @@ export default function YearlyReportPage() {
       setLossEntries(filtered);
     }
     load();
-  }, [selectedYear]);
+  }, [selectedPlantId, selectedYear]);
 
   const monthsInYear = useMemo(() => {
     const yearStart = startOfYear(new Date(selectedYear, 0, 1));
@@ -235,6 +239,14 @@ export default function YearlyReportPage() {
       })
       .filter((d) => d.value > 0);
   }, [categories, lossEntries]);
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-3 px-4">
+        <p className="text-sm text-muted-foreground">Select a plant from the top bar to continue.</p>
+      </div>
+    );
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const renderCustomLabel = (props: any) => {

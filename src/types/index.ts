@@ -2,6 +2,23 @@
 
 export type LossType = "shutdown" | "slowdown";
 
+export interface Site {
+  id: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface Plant {
+  id: string;
+  siteId: string;
+  name: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface LossCategory {
   id: string;
   name: string;
@@ -15,6 +32,7 @@ export interface LossCategory {
 export interface LossSubcategory {
   id: string;
   categoryId: string;
+  plantId: string;
   name: string;
   displayOrder: number;
   isActive: boolean;
@@ -32,6 +50,7 @@ export interface LossDetailCode {
 
 export interface DailyLog {
   id: string;
+  plantId: string;
   date: string; // YYYY-MM-DD
   production: number;
   bar: number; // Best Achievable Rate for this day
@@ -45,6 +64,7 @@ export interface DailyLog {
 export interface LossEntry {
   id: string;
   dailyLogId: string;
+  plantId: string;
   date: string; // denormalized for easy filtering
   categoryId: string;
   subcategoryId: string;

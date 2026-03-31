@@ -1,6 +1,8 @@
 "use client";
 
 import {
+  Site,
+  Plant,
   LossCategory,
   LossSubcategory,
   LossDetailCode,
@@ -29,6 +31,8 @@ function sb() {
 // ─── localStorage helpers (fallback when no Supabase) ─────────────
 
 const STORAGE_KEYS = {
+  sites: "losstrak_sites",
+  plants: "losstrak_plants",
   categories: "losstrak_categories",
   subcategories: "losstrak_subcategories",
   detailCodes: "losstrak_detail_codes",
@@ -36,6 +40,7 @@ const STORAGE_KEYS = {
   lossEntries: "losstrak_loss_entries",
   config: "losstrak_config",
   initialized: "losstrak_initialized",
+  migratedV2: "losstrak_migrated_v2",
 } as const;
 
 function generateId(): string {
@@ -81,14 +86,36 @@ function toCat(r: Row): LossCategory {
   };
 }
 
+function toSite(r: any): Site {
+  return {
+    id: r.id,
+    name: r.name,
+    displayOrder: r.display_order ?? r.displayOrder ?? 0,
+    isActive: r.is_active ?? r.isActive ?? true,
+    createdAt: r.created_at ?? r.createdAt,
+  };
+}
+
+function toPlant(r: any): Plant {
+  return {
+    id: r.id,
+    siteId: r.site_id ?? r.siteId,
+    name: r.name,
+    displayOrder: r.display_order ?? r.displayOrder ?? 0,
+    isActive: r.is_active ?? r.isActive ?? true,
+    createdAt: r.created_at ?? r.createdAt,
+  };
+}
+
 function toSub(r: any): LossSubcategory {
   return {
     id: r.id,
-    categoryId: r.category_id,
+    categoryId: r.category_id ?? r.categoryId,
+    plantId: r.plant_id ?? r.plantId ?? "",
     name: r.name,
-    displayOrder: r.display_order,
-    isActive: r.is_active,
-    createdAt: r.created_at,
+    displayOrder: r.display_order ?? r.displayOrder ?? 0,
+    isActive: r.is_active ?? r.isActive ?? true,
+    createdAt: r.created_at ?? r.createdAt,
   };
 }
 
@@ -106,29 +133,31 @@ function toDc(r: any): LossDetailCode {
 function toLog(r: any): DailyLog {
   return {
     id: r.id,
+    plantId: r.plant_id ?? r.plantId ?? "",
     date: r.date,
     production: Number(r.production),
     bar: Number(r.bar),
     delta: Number(r.delta),
     comments: r.comments,
     status: r.status as DailyLog["status"],
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    createdAt: r.created_at ?? r.createdAt,
+    updatedAt: r.updated_at ?? r.updatedAt,
   };
 }
 
 function toEntry(r: any): LossEntry {
   return {
     id: r.id,
-    dailyLogId: r.daily_log_id,
+    dailyLogId: r.daily_log_id ?? r.dailyLogId,
+    plantId: r.plant_id ?? r.plantId ?? "",
     date: nullToEmpty(r.date),
-    categoryId: nullToEmpty(r.category_id),
-    subcategoryId: nullToEmpty(r.subcategory_id),
-    detailCodeId: nullToEmpty(r.detail_code_id),
-    lossType: r.loss_type as LossEntry["lossType"],
+    categoryId: nullToEmpty(r.category_id ?? r.categoryId),
+    subcategoryId: nullToEmpty(r.subcategory_id ?? r.subcategoryId),
+    detailCodeId: nullToEmpty(r.detail_code_id ?? r.detailCodeId),
+    lossType: (r.loss_type ?? r.lossType) as LossEntry["lossType"],
     amount: Number(r.amount),
     comments: r.comments,
-    createdAt: r.created_at,
+    createdAt: r.created_at ?? r.createdAt,
   };
 }
 
@@ -174,42 +203,269 @@ const DEFAULT_SUBCATEGORIES: Record<string, { name: string; displayOrder: number
   ],
 };
 
+const DEFAULT_SITE_ID = "00000000-0000-0000-0000-000000000001";
+const DEFAULT_PLANT_ID = "00000000-0000-0000-0000-000000000002";
+
 const DEFAULT_CONFIG: { key: string; value: string }[] = [
-  { key: "bar_rate", value: "1200" },
-  { key: "production_unit", value: "tonnes" },
-  { key: "operating_hours", value: "24" },
+  { key: `plant:${DEFAULT_PLANT_ID}:bar_rate`, value: "1200" },
+  { key: `plant:${DEFAULT_PLANT_ID}:production_unit`, value: "tonnes" },
+  { key: `plant:${DEFAULT_PLANT_ID}:operating_hours`, value: "24" },
+  { key: "selected_plant_id", value: DEFAULT_PLANT_ID },
 ];
 
 export function initializeStore(): void {
   if (typeof window === "undefined") return;
   // Supabase is seeded via migrations — only seed localStorage
   if (sb()) return;
-  if (localStorage.getItem(STORAGE_KEYS.initialized)) return;
 
-  const categories: LossCategory[] = DEFAULT_CATEGORIES.map((cat) => ({
-    ...cat, id: generateId(), createdAt: now(),
-  }));
-  setStore(STORAGE_KEYS.categories, categories);
+  if (!localStorage.getItem(STORAGE_KEYS.initialized)) {
+    const defaultSite: Site = {
+      id: DEFAULT_SITE_ID, name: "Default Site", displayOrder: 1,
+      isActive: true, createdAt: now(),
+    };
+    const defaultPlant: Plant = {
+      id: DEFAULT_PLANT_ID, siteId: DEFAULT_SITE_ID, name: "Default Plant",
+      displayOrder: 1, isActive: true, createdAt: now(),
+    };
+    setStore(STORAGE_KEYS.sites, [defaultSite]);
+    setStore(STORAGE_KEYS.plants, [defaultPlant]);
 
-  const subcategories: LossSubcategory[] = [];
-  for (const cat of categories) {
-    for (const sub of DEFAULT_SUBCATEGORIES[cat.name] || []) {
-      subcategories.push({
-        id: generateId(), categoryId: cat.id, name: sub.name,
-        displayOrder: sub.displayOrder, isActive: true, createdAt: now(),
-      });
+    const categories: LossCategory[] = DEFAULT_CATEGORIES.map((cat) => ({
+      ...cat, id: generateId(), createdAt: now(),
+    }));
+    setStore(STORAGE_KEYS.categories, categories);
+
+    const subcategories: LossSubcategory[] = [];
+    for (const cat of categories) {
+      for (const sub of DEFAULT_SUBCATEGORIES[cat.name] || []) {
+        subcategories.push({
+          id: generateId(), categoryId: cat.id, plantId: DEFAULT_PLANT_ID,
+          name: sub.name, displayOrder: sub.displayOrder, isActive: true,
+          createdAt: now(),
+        });
+      }
     }
-  }
-  setStore(STORAGE_KEYS.subcategories, subcategories);
-  setStore(STORAGE_KEYS.detailCodes, []);
+    setStore(STORAGE_KEYS.subcategories, subcategories);
+    setStore(STORAGE_KEYS.detailCodes, []);
 
-  const config: AppConfig[] = DEFAULT_CONFIG.map((c) => ({
-    id: generateId(), key: c.key, value: c.value, updatedAt: now(),
-  }));
-  setStore(STORAGE_KEYS.config, config);
-  setStore(STORAGE_KEYS.dailyLogs, []);
-  setStore(STORAGE_KEYS.lossEntries, []);
-  localStorage.setItem(STORAGE_KEYS.initialized, "true");
+    const config: AppConfig[] = DEFAULT_CONFIG.map((c) => ({
+      id: generateId(), key: c.key, value: c.value, updatedAt: now(),
+    }));
+    setStore(STORAGE_KEYS.config, config);
+    setStore(STORAGE_KEYS.dailyLogs, []);
+    setStore(STORAGE_KEYS.lossEntries, []);
+    localStorage.setItem(STORAGE_KEYS.initialized, "true");
+  }
+
+  // Migrate existing v1 data to v2 (add plantId)
+  if (!localStorage.getItem(STORAGE_KEYS.migratedV2)) {
+    // Ensure default site/plant exist
+    const sites = getStore<Site>(STORAGE_KEYS.sites);
+    if (sites.length === 0) {
+      setStore(STORAGE_KEYS.sites, [{
+        id: DEFAULT_SITE_ID, name: "Default Site", displayOrder: 1,
+        isActive: true, createdAt: now(),
+      }]);
+    }
+    const plants = getStore<Plant>(STORAGE_KEYS.plants);
+    if (plants.length === 0) {
+      setStore(STORAGE_KEYS.plants, [{
+        id: DEFAULT_PLANT_ID, siteId: DEFAULT_SITE_ID, name: "Default Plant",
+        displayOrder: 1, isActive: true, createdAt: now(),
+      }]);
+    }
+
+    // Backfill plantId on subcategories
+    const subs = getStore<LossSubcategory>(STORAGE_KEYS.subcategories);
+    setStore(STORAGE_KEYS.subcategories,
+      subs.map((s) => ({ ...s, plantId: s.plantId || DEFAULT_PLANT_ID }))
+    );
+
+    // Backfill plantId on daily logs
+    const logs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
+    setStore(STORAGE_KEYS.dailyLogs,
+      logs.map((l) => ({ ...l, plantId: l.plantId || DEFAULT_PLANT_ID }))
+    );
+
+    // Backfill plantId on loss entries
+    const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+    setStore(STORAGE_KEYS.lossEntries,
+      entries.map((e) => ({ ...e, plantId: e.plantId || DEFAULT_PLANT_ID }))
+    );
+
+    // Migrate config keys: bar_rate → plant:{id}:bar_rate
+    const configs = getStore<AppConfig>(STORAGE_KEYS.config);
+    const legacyKeys = ["bar_rate", "production_unit", "operating_hours", "barRate", "productionUnit", "operatingHours"];
+    const canonical: Record<string, string> = {
+      bar_rate: "bar_rate", barRate: "bar_rate",
+      production_unit: "production_unit", productionUnit: "production_unit",
+      operating_hours: "operating_hours", operatingHours: "operating_hours",
+    };
+    const updated = configs.map((c) => {
+      if (legacyKeys.includes(c.key)) {
+        return { ...c, key: `plant:${DEFAULT_PLANT_ID}:${canonical[c.key]}` };
+      }
+      return c;
+    });
+    // Add selected_plant_id if missing
+    if (!updated.find((c) => c.key === "selected_plant_id")) {
+      updated.push({ id: generateId(), key: "selected_plant_id", value: DEFAULT_PLANT_ID, updatedAt: now() });
+    }
+    setStore(STORAGE_KEYS.config, updated);
+
+    localStorage.setItem(STORAGE_KEYS.migratedV2, "true");
+  }
+}
+
+// ─── Sites ──────────────────────────────────────────────────────
+
+export async function getSites(): Promise<Site[]> {
+  const client = sb();
+  if (client) {
+    const { data, error } = await client
+      .from("sites")
+      .select("*")
+      .eq("is_active", true)
+      .order("display_order");
+    if (error) throw error;
+    return (data ?? []).map(toSite);
+  }
+  return getStore<Site>(STORAGE_KEYS.sites)
+    .filter((s) => s.isActive)
+    .sort((a, b) => a.displayOrder - b.displayOrder);
+}
+
+export async function createSite(
+  data: Omit<Site, "id" | "createdAt">
+): Promise<Site> {
+  const client = sb();
+  if (client) {
+    const { data: row, error } = await client
+      .from("sites")
+      .insert({ name: data.name, display_order: data.displayOrder, is_active: data.isActive })
+      .select()
+      .single();
+    if (error) throw error;
+    return toSite(row);
+  }
+  const sites = getStore<Site>(STORAGE_KEYS.sites);
+  const site: Site = { ...data, id: generateId(), createdAt: now() };
+  sites.push(site);
+  setStore(STORAGE_KEYS.sites, sites);
+  return site;
+}
+
+export async function updateSite(
+  id: string,
+  data: Partial<Site>
+): Promise<Site | null> {
+  const client = sb();
+  if (client) {
+    const update: Record<string, unknown> = {};
+    if (data.name !== undefined) update.name = data.name;
+    if (data.displayOrder !== undefined) update.display_order = data.displayOrder;
+    if (data.isActive !== undefined) update.is_active = data.isActive;
+    const { data: row, error } = await client
+      .from("sites")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return toSite(row);
+  }
+  const sites = getStore<Site>(STORAGE_KEYS.sites);
+  const idx = sites.findIndex((s) => s.id === id);
+  if (idx === -1) return null;
+  sites[idx] = { ...sites[idx], ...data };
+  setStore(STORAGE_KEYS.sites, sites);
+  return sites[idx];
+}
+
+export async function deleteSite(id: string): Promise<void> {
+  const client = sb();
+  if (client) {
+    const { error } = await client.from("sites").update({ is_active: false }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const sites = getStore<Site>(STORAGE_KEYS.sites);
+  setStore(STORAGE_KEYS.sites, sites.map((s) => (s.id === id ? { ...s, isActive: false } : s)));
+}
+
+// ─── Plants ─────────────────────────────────────────────────────
+
+export async function getPlants(siteId?: string): Promise<Plant[]> {
+  const client = sb();
+  if (client) {
+    let q = client.from("plants").select("*").eq("is_active", true).order("display_order");
+    if (siteId) q = q.eq("site_id", siteId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data ?? []).map(toPlant);
+  }
+  let plants = getStore<Plant>(STORAGE_KEYS.plants).filter((p) => p.isActive);
+  if (siteId) plants = plants.filter((p) => p.siteId === siteId);
+  return plants.sort((a, b) => a.displayOrder - b.displayOrder);
+}
+
+export async function createPlant(
+  data: Omit<Plant, "id" | "createdAt">
+): Promise<Plant> {
+  const client = sb();
+  if (client) {
+    const { data: row, error } = await client
+      .from("plants")
+      .insert({ site_id: data.siteId, name: data.name, display_order: data.displayOrder, is_active: data.isActive })
+      .select()
+      .single();
+    if (error) throw error;
+    return toPlant(row);
+  }
+  const plants = getStore<Plant>(STORAGE_KEYS.plants);
+  const plant: Plant = { ...data, id: generateId(), createdAt: now() };
+  plants.push(plant);
+  setStore(STORAGE_KEYS.plants, plants);
+  return plant;
+}
+
+export async function updatePlant(
+  id: string,
+  data: Partial<Plant>
+): Promise<Plant | null> {
+  const client = sb();
+  if (client) {
+    const update: Record<string, unknown> = {};
+    if (data.siteId !== undefined) update.site_id = data.siteId;
+    if (data.name !== undefined) update.name = data.name;
+    if (data.displayOrder !== undefined) update.display_order = data.displayOrder;
+    if (data.isActive !== undefined) update.is_active = data.isActive;
+    const { data: row, error } = await client
+      .from("plants")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) throw error;
+    return toPlant(row);
+  }
+  const plants = getStore<Plant>(STORAGE_KEYS.plants);
+  const idx = plants.findIndex((p) => p.id === id);
+  if (idx === -1) return null;
+  plants[idx] = { ...plants[idx], ...data };
+  setStore(STORAGE_KEYS.plants, plants);
+  return plants[idx];
+}
+
+export async function deletePlant(id: string): Promise<void> {
+  const client = sb();
+  if (client) {
+    const { error } = await client.from("plants").update({ is_active: false }).eq("id", id);
+    if (error) throw error;
+    return;
+  }
+  const plants = getStore<Plant>(STORAGE_KEYS.plants);
+  setStore(STORAGE_KEYS.plants, plants.map((p) => (p.id === id ? { ...p, isActive: false } : p)));
 }
 
 // ─── Categories ──────────────────────────────────────────────────
@@ -317,33 +573,34 @@ export async function deleteCategory(id: string): Promise<void> {
 
 // ─── Subcategories ───────────────────────────────────────────────
 
-export async function getSubcategories(categoryId?: string): Promise<LossSubcategory[]> {
+export async function getSubcategories(plantId: string, categoryId?: string): Promise<LossSubcategory[]> {
   const client = sb();
   if (client) {
-    let q = client.from("loss_subcategories").select("*").eq("is_active", true).order("display_order");
+    let q = client.from("loss_subcategories").select("*")
+      .eq("is_active", true).eq("plant_id", plantId).order("display_order");
     if (categoryId) q = q.eq("category_id", categoryId);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map(toSub);
   }
-  const subs = getStore<LossSubcategory>(STORAGE_KEYS.subcategories).filter((s) => s.isActive);
-  if (categoryId) return subs.filter((s) => s.categoryId === categoryId);
+  let subs = getStore<LossSubcategory>(STORAGE_KEYS.subcategories)
+    .filter((s) => s.isActive && s.plantId === plantId);
+  if (categoryId) subs = subs.filter((s) => s.categoryId === categoryId);
   return subs.sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
-export async function getAllSubcategories(): Promise<LossSubcategory[]> {
+export async function getAllSubcategories(plantId?: string): Promise<LossSubcategory[]> {
   const client = sb();
   if (client) {
-    const { data, error } = await client
-      .from("loss_subcategories")
-      .select("*")
-      .order("display_order");
+    let q = client.from("loss_subcategories").select("*").order("display_order");
+    if (plantId) q = q.eq("plant_id", plantId);
+    const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map(toSub);
   }
-  return getStore<LossSubcategory>(STORAGE_KEYS.subcategories).sort(
-    (a, b) => a.displayOrder - b.displayOrder
-  );
+  let subs = getStore<LossSubcategory>(STORAGE_KEYS.subcategories);
+  if (plantId) subs = subs.filter((s) => s.plantId === plantId);
+  return subs.sort((a, b) => a.displayOrder - b.displayOrder);
 }
 
 export async function createSubcategory(
@@ -355,6 +612,7 @@ export async function createSubcategory(
       .from("loss_subcategories")
       .insert({
         category_id: data.categoryId,
+        plant_id: data.plantId,
         name: data.name,
         display_order: data.displayOrder,
         is_active: data.isActive,
@@ -522,34 +780,36 @@ export async function deleteDetailCode(id: string): Promise<void> {
 
 // ─── Daily Logs ──────────────────────────────────────────────────
 
-export async function getDailyLogs(): Promise<DailyLog[]> {
+export async function getDailyLogs(plantId: string): Promise<DailyLog[]> {
   const client = sb();
   if (client) {
     const { data, error } = await client
       .from("daily_logs")
       .select("*")
+      .eq("plant_id", plantId)
       .order("date", { ascending: false });
     if (error) throw error;
     return (data ?? []).map(toLog);
   }
-  return getStore<DailyLog>(STORAGE_KEYS.dailyLogs).sort(
-    (a, b) => b.date.localeCompare(a.date)
-  );
+  return getStore<DailyLog>(STORAGE_KEYS.dailyLogs)
+    .filter((l) => l.plantId === plantId)
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export async function getDailyLog(date: string): Promise<DailyLog | null> {
+export async function getDailyLog(plantId: string, date: string): Promise<DailyLog | null> {
   const client = sb();
   if (client) {
     const { data, error } = await client
       .from("daily_logs")
       .select("*")
+      .eq("plant_id", plantId)
       .eq("date", date)
       .maybeSingle();
     if (error) throw error;
     return data ? toLog(data) : null;
   }
   const logs = getStore<DailyLog>(STORAGE_KEYS.dailyLogs);
-  return logs.find((l) => l.date === date) || null;
+  return logs.find((l) => l.plantId === plantId && l.date === date) || null;
 }
 
 export async function getDailyLogById(id: string): Promise<DailyLog | null> {
@@ -576,6 +836,7 @@ export async function createDailyLog(
     const { data: row, error } = await client
       .from("daily_logs")
       .insert({
+        plant_id: data.plantId,
         date: data.date,
         production: data.production,
         bar: data.bar,
@@ -638,6 +899,7 @@ export async function updateDailyLog(
 }
 
 export async function getDailyLogsByDateRange(
+  plantId: string,
   startDate: string,
   endDate: string
 ): Promise<DailyLog[]> {
@@ -646,6 +908,7 @@ export async function getDailyLogsByDateRange(
     const { data, error } = await client
       .from("daily_logs")
       .select("*")
+      .eq("plant_id", plantId)
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date");
@@ -653,7 +916,7 @@ export async function getDailyLogsByDateRange(
     return (data ?? []).map(toLog);
   }
   return getStore<DailyLog>(STORAGE_KEYS.dailyLogs)
-    .filter((l) => l.date >= startDate && l.date <= endDate)
+    .filter((l) => l.plantId === plantId && l.date >= startDate && l.date <= endDate)
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -739,16 +1002,16 @@ export async function bulkDeleteDailyLogs(ids: string[]): Promise<void> {
 
 // ─── Loss Entries ────────────────────────────────────────────────
 
-export async function getLossEntries(date?: string): Promise<LossEntry[]> {
+export async function getLossEntries(plantId: string, date?: string): Promise<LossEntry[]> {
   const client = sb();
   if (client) {
-    let q = client.from("loss_entries").select("*").order("created_at");
+    let q = client.from("loss_entries").select("*").eq("plant_id", plantId).order("created_at");
     if (date) q = q.eq("date", date);
     const { data, error } = await q;
     if (error) throw error;
     return (data ?? []).map(toEntry);
   }
-  const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+  const entries = getStore<LossEntry>(STORAGE_KEYS.lossEntries).filter((e) => e.plantId === plantId);
   if (date) {
     return entries
       .filter((e) => e.date === date)
@@ -757,14 +1020,14 @@ export async function getLossEntries(date?: string): Promise<LossEntry[]> {
   return entries;
 }
 
-export async function getAllLossEntries(): Promise<LossEntry[]> {
+export async function getAllLossEntries(plantId: string): Promise<LossEntry[]> {
   const client = sb();
   if (client) {
-    const { data, error } = await client.from("loss_entries").select("*");
+    const { data, error } = await client.from("loss_entries").select("*").eq("plant_id", plantId);
     if (error) throw error;
     return (data ?? []).map(toEntry);
   }
-  return getStore<LossEntry>(STORAGE_KEYS.lossEntries);
+  return getStore<LossEntry>(STORAGE_KEYS.lossEntries).filter((e) => e.plantId === plantId);
 }
 
 export async function createLossEntry(
@@ -774,12 +1037,12 @@ export async function createLossEntry(
   if (client) {
     const row: Record<string, unknown> = {
       daily_log_id: data.dailyLogId,
+      plant_id: data.plantId,
       loss_type: data.lossType,
       amount: data.amount,
       comments: data.comments,
     };
-    // Only include FK / date columns when they have a value (avoids NOT NULL violations
-    // if migration 003 hasn't been applied yet)
+    // Only include FK / date columns when they have a value
     if (data.date) row.date = data.date;
     if (data.categoryId) row.category_id = data.categoryId;
     if (data.subcategoryId) row.subcategory_id = data.subcategoryId;
@@ -864,23 +1127,39 @@ export async function getConfig(key: string): Promise<string | null> {
   return config ? config.value : null;
 }
 
-export async function getBarRate(): Promise<number> {
-  const val = (await getConfig("bar_rate")) || (await getConfig("barRate"));
+function plantConfigKey(plantId: string, key: string): string {
+  return `plant:${plantId}:${key}`;
+}
+
+export async function getBarRate(plantId: string): Promise<number> {
+  const val = await getConfig(plantConfigKey(plantId, "bar_rate"));
   return val ? parseFloat(val) : 1200;
 }
 
-export async function getProductionUnit(): Promise<string> {
-  return (
-    (await getConfig("production_unit")) ||
-    (await getConfig("productionUnit")) ||
-    "tonnes"
-  );
+export async function getProductionUnit(plantId: string): Promise<string> {
+  const val = await getConfig(plantConfigKey(plantId, "production_unit"));
+  return val || "tonnes";
 }
 
-export async function getOperatingHours(): Promise<number> {
-  const val =
-    (await getConfig("operating_hours")) || (await getConfig("operatingHours"));
+export async function getOperatingHours(plantId: string): Promise<number> {
+  const val = await getConfig(plantConfigKey(plantId, "operating_hours"));
   return val ? parseFloat(val) : 24;
+}
+
+export async function setPlantConfig(
+  plantId: string,
+  key: string,
+  value: string | number
+): Promise<void> {
+  return setConfig(plantConfigKey(plantId, key), value);
+}
+
+export async function getSelectedPlantId(): Promise<string | null> {
+  return getConfig("selected_plant_id");
+}
+
+export async function setSelectedPlantId(id: string): Promise<void> {
+  return setConfig("selected_plant_id", id);
 }
 
 export async function setConfig(key: string, value: string | number): Promise<void> {
@@ -907,6 +1186,7 @@ export async function setConfig(key: string, value: string | number): Promise<vo
 
 export function resetStore(): void {
   Object.values(STORAGE_KEYS).forEach((key) => localStorage.removeItem(key));
+  localStorage.removeItem(STORAGE_KEYS.migratedV2);
   initializeStore();
 }
 
@@ -922,6 +1202,7 @@ export interface DaySnapshot {
 }
 
 export async function getRecentHistory(
+  plantId: string,
   beforeDate: string,
   days: number = 7
 ): Promise<DaySnapshot[]> {
@@ -930,6 +1211,7 @@ export async function getRecentHistory(
     const { data: logs, error: logErr } = await client
       .from("daily_logs")
       .select("*")
+      .eq("plant_id", plantId)
       .lt("date", beforeDate)
       .order("date", { ascending: false })
       .limit(days);
@@ -940,6 +1222,7 @@ export async function getRecentHistory(
     const { data: entries, error: entErr } = await client
       .from("loss_entries")
       .select("*")
+      .eq("plant_id", plantId)
       .in("date", dates);
     if (entErr) throw entErr;
 
@@ -964,7 +1247,7 @@ export async function getRecentHistory(
   const allEntries = getStore<LossEntry>(STORAGE_KEYS.lossEntries);
 
   const recentLogs = allLogs
-    .filter((l) => l.date < beforeDate)
+    .filter((l) => l.plantId === plantId && l.date < beforeDate)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, days);
 
@@ -974,6 +1257,6 @@ export async function getRecentHistory(
     bar: log.bar,
     delta: log.delta,
     status: log.status as "open" | "closed",
-    entries: allEntries.filter((e) => e.date === log.date),
+    entries: allEntries.filter((e) => e.plantId === plantId && e.date === log.date),
   }));
 }

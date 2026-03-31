@@ -15,6 +15,7 @@ import {
   updateDetailCode,
   deleteDetailCode,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { LossCategory, LossSubcategory, LossDetailCode, LossType } from "@/types";
 import {
   Card,
@@ -62,6 +63,7 @@ function downloadCsv(content: string, filename: string) {
 }
 
 export default function CategoriesPage() {
+  const { selectedPlantId } = usePlant();
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
   const [detailCodes, setDetailCodes] = useState<LossDetailCode[]>([]);
@@ -109,12 +111,12 @@ export default function CategoriesPage() {
 
   const loadData = useCallback(async () => {
     const allCategories = await getAllCategories();
-    const allSubcategories = await getAllSubcategories();
+    const allSubcategories = await getAllSubcategories(selectedPlantId ?? undefined);
     const allDetailCodes = await getAllDetailCodes();
     setCategories(allCategories);
     setSubcategories(allSubcategories);
     setDetailCodes(allDetailCodes);
-  }, []);
+  }, [selectedPlantId]);
 
   useEffect(() => {
     loadData();
@@ -202,6 +204,7 @@ External,Feedstock Quality,slowdown,1`;
           }
           try {
             await createSubcategory({
+              plantId: selectedPlantId!,
               categoryId: existingCat.id,
               name: row.subcategory,
               displayOrder: row.order,
@@ -223,7 +226,7 @@ External,Feedstock Quality,slowdown,1`;
     } finally {
       setUploading(false);
     }
-  }, [parsedUploadRows, categories, subcategories]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [parsedUploadRows, categories, subcategories, selectedPlantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownloadCategoryTemplate = useCallback(() => {
     const header = "category,subcategory,loss_types,display_order";
@@ -398,6 +401,7 @@ External,Feedstock Quality,slowdown,1`;
     }
 
     await createSubcategory({
+      plantId: selectedPlantId!,
       categoryId: addSubcategoryParentId,
       name: newSubcategoryName.trim(),
       displayOrder: newSubcategoryOrder,

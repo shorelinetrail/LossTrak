@@ -61,6 +61,7 @@ interface BulkEntryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  plantId: string;
   bar: number;
   productionUnit: string;
   categories: LossCategory[];
@@ -74,6 +75,7 @@ export function BulkEntryDialog({
   open,
   onOpenChange,
   onSaved,
+  plantId,
   bar,
   productionUnit,
   categories,
@@ -287,6 +289,7 @@ export function BulkEntryDialog({
           updated++;
         } else {
           const log = await createDailyLog({
+            plantId,
             date: row.date,
             production: prod,
             bar,
@@ -303,6 +306,7 @@ export function BulkEntryDialog({
             continue;
           await createLossEntry({
             dailyLogId,
+            plantId,
             date: row.date,
             categoryId: loss.categoryId,
             subcategoryId: loss.subcategoryId,

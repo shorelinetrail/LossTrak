@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getBarRate, getProductionUnit, getOperatingHours, setConfig } from "@/lib/store";
+import { getBarRate, getProductionUnit, getOperatingHours, setPlantConfig } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,24 +10,37 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
+  const { selectedPlantId, selectedPlant } = usePlant();
   const [barRate, setBarRate] = useState<number>(0);
   const [productionUnit, setProductionUnit] = useState<string>("");
   const [operatingHours, setOperatingHours] = useState<number>(24);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    if (!selectedPlantId) return;
     async function load() {
       const [currentBar, currentUnit, currentHours] = await Promise.all([
-        getBarRate(),
-        getProductionUnit(),
-        getOperatingHours(),
+        getBarRate(selectedPlantId!),
+        getProductionUnit(selectedPlantId!),
+        getOperatingHours(selectedPlantId!),
       ]);
       setBarRate(currentBar);
       setProductionUnit(currentUnit);
       setOperatingHours(currentHours);
     }
     load();
-  }, []);
+  }, [selectedPlantId]);
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-2xl py-4 px-4">
+        <h1 className="text-lg font-semibold">Settings</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Please select a plant to configure settings.
+        </p>
+      </div>
+    );
+  }
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -47,9 +61,9 @@ export default function SettingsPage() {
         return;
       }
 
-      await setConfig("bar_rate", barRate);
-      await setConfig("production_unit", productionUnit.trim());
-      await setConfig("operating_hours", operatingHours);
+      await setPlantConfig(selectedPlantId, "bar_rate", barRate);
+      await setPlantConfig(selectedPlantId, "production_unit", productionUnit.trim());
+      await setPlantConfig(selectedPlantId, "operating_hours", operatingHours);
       toast.success("Settings saved successfully.");
     } catch {
       toast.error("Failed to save settings. Please try again.");
@@ -62,7 +76,7 @@ export default function SettingsPage() {
     <div className="container mx-auto max-w-2xl py-4 px-4">
       <h1 className="text-lg font-semibold">Settings</h1>
       <p className="text-sm text-muted-foreground mt-0.5 mb-4">
-        Configure application-wide production parameters.
+        Configure production parameters for {selectedPlant?.name ?? "selected plant"}.
       </p>
 
       <Card>

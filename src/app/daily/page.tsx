@@ -93,6 +93,7 @@ import {
 import { format, parseISO, addDays, subDays, isToday } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { usePlant } from "@/components/plant-context";
 import { LossContextPanel } from "@/components/daily/loss-context-panel";
 import { BulkEntryDialog } from "@/components/daily/bulk-entry-dialog";
 
@@ -190,6 +191,8 @@ function defaultDate(): Date {
 // ─── Page ────────────────────────────────────────────────────────
 
 export default function DailyPage() {
+  const { selectedPlantId } = usePlant();
+
   // ── Log table state ──────────────────────────────────────────
   const [allLogs, setAllLogs] = useState<LogRow[]>([]);
   const [allEntriesMap, setAllEntriesMap] = useState<Map<string, number>>(new Map());
@@ -235,8 +238,8 @@ export default function DailyPage() {
   // ── Load config + all logs on mount ──────────────────────────
   const loadAllLogs = useCallback(async () => {
     const [dailyLogs, entries] = await Promise.all([
-      getDailyLogs(),
-      getAllLossEntries(),
+      getDailyLogs(selectedPlantId!),
+      getAllLossEntries(selectedPlantId!),
     ]);
     const byDate = new Map<string, number>();
     for (const e of entries) {
@@ -249,17 +252,17 @@ export default function DailyPage() {
         return { ...log, accounted, remaining: log.delta - accounted };
       })
     );
-  }, []);
+  }, [selectedPlantId]);
 
   useEffect(() => {
     const init = async () => {
       try {
         const [barVal, unit, opHours, cats, subs, codes] = await Promise.all([
-          getBarRate(),
-          getProductionUnit(),
-          getOperatingHours(),
+          getBarRate(selectedPlantId!),
+          getProductionUnit(selectedPlantId!),
+          getOperatingHours(selectedPlantId!),
           getCategories(),
-          getSubcategories(),
+          getSubcategories(selectedPlantId!),
           getDetailCodes(),
         ]);
         setBar(barVal);
@@ -275,7 +278,7 @@ export default function DailyPage() {
       }
     };
     init();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedPlantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load selected day when date changes ──────────────────────
   useEffect(() => {
@@ -288,19 +291,19 @@ export default function DailyPage() {
     const loadDailyData = async () => {
       setLoading(true);
       try {
-        const log = await getDailyLog(dateKey);
+        const log = await getDailyLog(selectedPlantId!, dateKey);
         setDailyLog(log);
         if (log) {
           setProductionInput(String(log.production));
           setDayComments(log.comments ?? "");
-          const entries = await getLossEntries(dateKey);
+          const entries = await getLossEntries(selectedPlantId!, dateKey);
           setLossEntries(entries);
         } else {
           setProductionInput("");
           setDayComments("");
           setLossEntries([]);
         }
-        const history = await getRecentHistory(dateKey, 30);
+        const history = await getRecentHistory(selectedPlantId!, dateKey, 30);
         setRecentHistory(history);
       } catch (err) {
         console.error("Failed to load daily data:", err);
@@ -310,7 +313,7 @@ export default function DailyPage() {
       }
     };
     loadDailyData();
-  }, [dateKey]);
+  }, [dateKey, selectedPlantId]);
 
   // ── Sorted + filtered log table ──────────────────────────────
   const filteredLogs = useMemo(() => {
@@ -453,6 +456,7 @@ export default function DailyPage() {
     try {
       setSaving(true);
       const log = await createDailyLog({
+        plantId: selectedPlantId!,
         date: dateKey,
         production: prod,
         bar,
@@ -505,6 +509,7 @@ export default function DailyPage() {
     if (!dailyLog) return;
     try {
       const entry = await createLossEntry({
+        plantId: selectedPlantId!,
         dailyLogId: dailyLog.id,
         date: dateKey,
         categoryId: "",
@@ -521,7 +526,7 @@ export default function DailyPage() {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Failed to add loss entry: ${msg}`);
     }
-  }, [dailyLog, dateKey, refreshLogTable]);
+  }, [dailyLog, dateKey, refreshLogTable, selectedPlantId]);
 
   const handleUpdateLossEntry = useCallback(
     async (entryId: string, field: string, value: string | number) => {
@@ -615,6 +620,7 @@ export default function DailyPage() {
         const newEntries: LossEntry[] = [];
         for (const prev of previousEntries) {
           const entry = await createLossEntry({
+            plantId: selectedPlantId!,
             dailyLogId: dailyLog.id,
             date: dateKey,
             categoryId: prev.categoryId,
@@ -640,7 +646,7 @@ export default function DailyPage() {
         toast.error("Failed to carry forward entries.");
       }
     },
-    [dailyLog, isClosed, dateKey, refreshLogTable]
+    [dailyLog, isClosed, dateKey, refreshLogTable, selectedPlantId]
   );
 
   const getSubcategoriesForCategory = useCallback(
@@ -797,6 +803,14 @@ export default function DailyPage() {
   };
 
   // ─── Render ──────────────────────────────────────────────────
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-3 px-4">
+        <p className="text-sm text-muted-foreground">Select a plant from the top bar to continue.</p>
+      </div>
+    );
+  }
 
   // Table view (no date selected)
   if (!selectedDate) {
@@ -1049,6 +1063,7 @@ export default function DailyPage() {
           open={bulkDialogOpen}
           onOpenChange={setBulkDialogOpen}
           onSaved={refreshLogTable}
+          plantId={selectedPlantId!}
           bar={bar}
           productionUnit={productionUnit}
           categories={categories}

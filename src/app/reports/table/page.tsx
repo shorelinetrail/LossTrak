@@ -8,6 +8,7 @@ import {
   getSubcategories,
   getProductionUnit,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { DailyLog, LossEntry, LossCategory, LossSubcategory } from "@/types";
 import {
   Card,
@@ -101,6 +102,7 @@ function CollapsibleCard({
 }
 
 export default function TableReportPage() {
+  const { selectedPlantId } = usePlant();
   const now = new Date();
   const [viewMode, setViewMode] = useState<ViewMode>("day");
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonth(now));
@@ -196,23 +198,25 @@ export default function TableReportPage() {
 
   useEffect(() => {
     async function load() {
-      const unit = await getProductionUnit();
+      if (!selectedPlantId) return;
+      const unit = await getProductionUnit(selectedPlantId);
       if (unit) setProductionUnit(unit);
       const cats = await getCategories();
       setCategories(cats);
-      const subs = await getSubcategories();
+      const subs = await getSubcategories(selectedPlantId);
       setSubcategories(subs);
     }
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   useEffect(() => {
     async function load() {
+      if (!selectedPlantId) return;
       const startStr = format(rangeStart, "yyyy-MM-dd");
       const endStr = format(rangeEnd, "yyyy-MM-dd");
-      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      const logs = await getDailyLogsByDateRange(selectedPlantId, startStr, endStr);
       setDailyLogs(logs);
-      const allLosses = await getAllLossEntries();
+      const allLosses = await getAllLossEntries(selectedPlantId);
       const filtered = allLosses.filter((entry) => {
         const entryDate = parseISO(entry.date);
         return entryDate >= rangeStart && entryDate <= rangeEnd;
@@ -220,7 +224,7 @@ export default function TableReportPage() {
       setAllLossEntries(filtered);
     }
     load();
-  }, [rangeStart, rangeEnd]);
+  }, [selectedPlantId, rangeStart, rangeEnd]);
 
   const totalProduction = useMemo(
     () => dailyLogs.reduce((sum, log) => sum + (log.production ?? 0), 0),
@@ -361,6 +365,14 @@ export default function TableReportPage() {
     if (viewMode === "month") return `${MONTHS[selectedMonth]} ${selectedYear}`;
     return String(selectedYear);
   }, [viewMode, safeSelectedDay, selectedMonth, selectedYear]);
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-3 px-4">
+        <p className="text-sm text-muted-foreground">Select a plant from the top bar to continue.</p>
+      </div>
+    );
+  }
 
   const handleDateChange = (value: string) => {
     if (value && isValid(parseISO(value))) {

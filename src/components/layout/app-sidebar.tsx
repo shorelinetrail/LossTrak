@@ -49,6 +49,7 @@ const navigation: (NavItem | NavGroup)[] = [
     label: "Admin",
     icon: Settings,
     items: [
+      { label: "Sites & Plants", href: "/admin/sites", icon: Factory },
       { label: "Categories", href: "/admin/categories", icon: Tags },
       { label: "Bulk Upload", href: "/admin/bulk-upload", icon: Upload },
       { label: "Historical Upload", href: "/admin/historical-upload", icon: History },

@@ -8,6 +8,7 @@ import {
   getSubcategories,
   getProductionUnit,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { DailyLog, LossEntry, LossCategory, LossSubcategory } from "@/types";
 import {
   BarChart,
@@ -87,6 +88,7 @@ const MONTHS = [
 type ViewMode = "month" | "rolling12";
 
 export default function MonthlyReportPage() {
+  const { selectedPlantId } = usePlant();
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(getMonth(now));
   const [selectedYear, setSelectedYear] = useState<number>(getYear(now));
@@ -123,17 +125,18 @@ export default function MonthlyReportPage() {
 
   useEffect(() => {
     async function load() {
-      const unit = await getProductionUnit();
+      if (!selectedPlantId) return;
+      const unit = await getProductionUnit(selectedPlantId);
       if (unit) setProductionUnit(unit);
 
       const cats = await getCategories();
       setCategories(cats);
 
-      const subs = await getSubcategories();
+      const subs = await getSubcategories(selectedPlantId);
       setSubcategories(subs);
     }
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   // Date range depending on view mode
   const { rangeStart, rangeEnd } = useMemo(() => {
@@ -148,13 +151,14 @@ export default function MonthlyReportPage() {
 
   useEffect(() => {
     async function load() {
+      if (!selectedPlantId) return;
       const startStr = format(rangeStart, "yyyy-MM-dd");
       const endStr = format(rangeEnd, "yyyy-MM-dd");
 
-      const logs = await getDailyLogsByDateRange(startStr, endStr);
+      const logs = await getDailyLogsByDateRange(selectedPlantId, startStr, endStr);
       setDailyLogs(logs);
 
-      const allLosses = await getAllLossEntries();
+      const allLosses = await getAllLossEntries(selectedPlantId);
       const filtered = allLosses.filter((entry) => {
         const entryDate = parseISO(entry.date);
         return entryDate >= rangeStart && entryDate <= rangeEnd;
@@ -162,7 +166,7 @@ export default function MonthlyReportPage() {
       setAllLossEntries(filtered);
     }
     load();
-  }, [rangeStart, rangeEnd]);
+  }, [selectedPlantId, rangeStart, rangeEnd]);
 
   const daysInMonth = useMemo(() => {
     if (viewMode === "rolling12") {
@@ -263,6 +267,14 @@ export default function MonthlyReportPage() {
   }, [rollingMonths, allLossEntries, categories, viewMode]);
 
   const stackedBarData = viewMode === "rolling12" ? stackedBarDataMonthly : stackedBarDataDaily;
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-3 px-4">
+        <p className="text-sm text-muted-foreground">Select a plant from the top bar to continue.</p>
+      </div>
+    );
+  }
 
   // Line chart data: daily production vs BAR (single month)
   const productionLineDataDaily = useMemo(() => {

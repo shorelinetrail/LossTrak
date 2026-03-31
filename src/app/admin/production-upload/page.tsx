@@ -8,6 +8,7 @@ import {
   createDailyLog,
   updateDailyLog,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -86,6 +87,7 @@ function parseDate(raw: string | number): string | null {
 /* ------------------------------------------------------------------ */
 
 export default function ProductionUploadPage() {
+  const { selectedPlantId } = usePlant();
   const [bar, setBar] = useState(0);
   const [productionUnit, setProductionUnit] = useState("units");
   const [importing, setImporting] = useState(false);
@@ -95,12 +97,13 @@ export default function ProductionUploadPage() {
   const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!selectedPlantId) return;
     const load = async () => {
-      setBar(await getBarRate());
-      setProductionUnit(await getProductionUnit());
+      setBar(await getBarRate(selectedPlantId));
+      setProductionUnit(await getProductionUnit(selectedPlantId));
     };
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   /* ---------------------------------------------------------------- */
   /*  Parse                                                            */
@@ -229,7 +232,7 @@ export default function ProductionUploadPage() {
 
     try {
       for (const row of validRows) {
-        const existing = await getDailyLog(row.date);
+        const existing = await getDailyLog(selectedPlantId!, row.date);
 
         if (existing) {
           if (existing.production === row.production) {
@@ -248,6 +251,7 @@ export default function ProductionUploadPage() {
           }
         } else {
           await createDailyLog({
+            plantId: selectedPlantId!,
             date: row.date,
             production: row.production,
             bar,
@@ -314,6 +318,17 @@ export default function ProductionUploadPage() {
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-3xl py-4 px-4">
+        <h1 className="text-lg font-semibold tracking-tight">Production Upload</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Please select a plant to upload data.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-3xl py-4 px-4 space-y-3">

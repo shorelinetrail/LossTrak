@@ -12,6 +12,8 @@ import {
   createLossEntry,
   updateDailyLog,
 } from "@/lib/store";
+import { usePlant } from "@/components/plant-context";
+
 import { LossCategory, LossSubcategory, LossType } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -110,6 +112,7 @@ function norm(s: string): string {
 /* ------------------------------------------------------------------ */
 
 export default function HistoricalUploadPage() {
+  const { selectedPlantId } = usePlant();
   const [categories, setCategories] = useState<LossCategory[]>([]);
   const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
   const [bar, setBar] = useState(0);
@@ -124,14 +127,15 @@ export default function HistoricalUploadPage() {
   const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!selectedPlantId) return;
     const load = async () => {
       setCategories(await getCategories());
-      setSubcategories(await getSubcategories());
-      setBar(await getBarRate());
-      setProductionUnit(await getProductionUnit());
+      setSubcategories(await getSubcategories(selectedPlantId));
+      setBar(await getBarRate(selectedPlantId));
+      setProductionUnit(await getProductionUnit(selectedPlantId));
     };
     load();
-  }, []);
+  }, [selectedPlantId]);
 
   // Build subcategory lookup (case-insensitive name → subcategory)
   const subcatLookup = useMemo(() => {
@@ -383,13 +387,14 @@ export default function HistoricalUploadPage() {
 
     try {
       for (const [date, dayEntries] of dateGroups) {
-        let log = await getDailyLog(date);
+        let log = await getDailyLog(selectedPlantId!, date);
         let status: ImportResult["status"] = "created";
 
         if (log) {
           status = "updated";
         } else {
           log = await createDailyLog({
+            plantId: selectedPlantId!,
             date,
             production: 0,
             bar,
@@ -415,6 +420,7 @@ export default function HistoricalUploadPage() {
           if (isDuplicate) continue;
 
           await createLossEntry({
+            plantId: selectedPlantId!,
             dailyLogId: log.id,
             date,
             categoryId: entry.categoryId,
@@ -540,6 +546,17 @@ export default function HistoricalUploadPage() {
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
   /* ---------------------------------------------------------------- */
+
+  if (!selectedPlantId) {
+    return (
+      <div className="container mx-auto max-w-5xl py-4 px-4">
+        <h1 className="text-lg font-semibold tracking-tight">Historical Upload</h1>
+        <p className="text-sm text-muted-foreground mt-2">
+          Please select a plant to upload data.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-5xl py-4 px-4 space-y-3">
