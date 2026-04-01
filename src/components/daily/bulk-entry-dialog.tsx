@@ -349,7 +349,7 @@ export function BulkEntryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[85vh] !flex !flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-base">Bulk Entry</DialogTitle>
           <DialogDescription className="text-xs">
