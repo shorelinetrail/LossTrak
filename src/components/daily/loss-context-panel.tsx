@@ -419,26 +419,27 @@ export function LossContextPanel({
           <div className="flex items-center gap-2">
             <History className="h-4 w-4 text-muted-foreground" />
             <CardTitle className="text-sm">Loss Context</CardTitle>
-            <Badge variant="outline" className="text-xs font-normal">
-              {rangedHistory.length}d
-            </Badge>
           </div>
           <div className="flex items-center gap-1">
-            {([7, 14, 30] as TimeRange[]).map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "secondary" : "ghost"}
-                size="sm"
-                className="h-6 px-2 text-xs"
-                onClick={() => {
-                  setTimeRange(range);
-                  setSelectedCell(null);
-                }}
-              >
-                {range}d
-              </Button>
-            ))}
-            <div className="w-px h-4 bg-border mx-1" />
+            {expanded && (
+              <>
+                {([7, 14, 30] as TimeRange[]).map((range) => (
+                  <Button
+                    key={range}
+                    variant={timeRange === range ? "secondary" : "ghost"}
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => {
+                      setTimeRange(range);
+                      setSelectedCell(null);
+                    }}
+                  >
+                    {range}d
+                  </Button>
+                ))}
+                <div className="w-px h-4 bg-border mx-1" />
+              </>
+            )}
             <Button
               variant="ghost"
               size="sm"
