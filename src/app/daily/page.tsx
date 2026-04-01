@@ -1432,7 +1432,7 @@ export default function DailyPage() {
             {absDelta > 0 && (
               <TooltipProvider>
                 <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-1 px-3">
                     <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
                       Allocation
                     </span>
