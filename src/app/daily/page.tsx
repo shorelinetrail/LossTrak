@@ -931,7 +931,7 @@ export default function DailyPage() {
                   if (v === "month") { setFilterStartDate(""); setFilterEndDate(""); }
                 }}
               >
-                <SelectTrigger className="h-7 py-0 text-xs w-[95px]">
+                <SelectTrigger className="!h-7 py-0 px-2 text-xs w-[95px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -970,7 +970,7 @@ export default function DailyPage() {
                 value={statusFilter}
                 onValueChange={(v) => setStatusFilter(v as StatusFilter)}
               >
-                <SelectTrigger className="h-7 py-0 text-xs w-[100px]">
+                <SelectTrigger className="!h-7 py-0 px-2 text-xs w-[100px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
