@@ -8,7 +8,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
-  ChevronUp,
   Copy,
   Flame,
   History,
@@ -448,9 +447,9 @@ export function LossContextPanel({
               aria-label={expanded ? "Collapse" : "Expand"}
             >
               {expanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
                 <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
               )}
             </Button>
           </div>
@@ -469,9 +468,9 @@ export function LossContextPanel({
                 <Lightbulb className="h-3.5 w-3.5" />
                 Insights ({insights.length})
                 {insightsExpanded ? (
-                  <ChevronUp className="h-3 w-3" />
-                ) : (
                   <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
                 )}
               </button>
               {insightsExpanded && (

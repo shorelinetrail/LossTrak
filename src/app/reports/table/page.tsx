@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import {
   format,
   startOfMonth,
@@ -90,9 +90,9 @@ function CollapsibleCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm">{title}</CardTitle>
           {open ? (
-            <ChevronUp className="h-4 w-4 text-muted-foreground" />
-          ) : (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
         </div>
       </CardHeader>
