@@ -1515,7 +1515,7 @@ export default function DailyPage() {
 
           {/* Production Edit */}
           {!isClosed && (
-            <Card className="border-primary/30">
+            <Card>
               <CardContent className="px-3 py-2">
                 <div className="flex items-center gap-3">
                   <Label htmlFor="production-edit" className="text-sm font-medium whitespace-nowrap">
