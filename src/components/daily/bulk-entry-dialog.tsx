@@ -36,6 +36,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Plus, Trash2, AlertTriangle, ArrowLeft } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -394,7 +399,7 @@ export function BulkEntryDialog({
 
         {/* ── Step 2: Day Entry Grid ─────────────────────── */}
         {step === 2 && (
-          <>
+          <div className="flex flex-col min-h-0 flex-1 gap-3">
             {/* Controls bar */}
             <div className="flex items-center gap-3 flex-wrap text-xs border-b pb-2">
               <button
@@ -647,6 +652,37 @@ export function BulkEntryDialog({
                               disabled={lossDisabled || isSkipped}
                             />
 
+                            {/* Assign all remaining */}
+                            {(() => {
+                              const prod = parseFloat(row.production) || 0;
+                              const delta = bar - prod;
+                              const otherTotal = row.losses
+                                .filter((_, idx) => idx !== li)
+                                .reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+                              const remaining = Math.round((delta - otherTotal) * 100) / 100;
+                              return !isSkipped && !lossDisabled && remaining > 0.01 ? (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 px-2 text-[10px] font-medium text-muted-foreground shrink-0"
+                                      onClick={() =>
+                                        updateLoss(sameLosses ? 0 : ri, li, {
+                                          amount: String(remaining),
+                                        })
+                                      }
+                                    >
+                                      = All
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p>Assign all remaining ({remaining.toLocaleString()} {productionUnit})</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : null;
+                            })()}
+
                             {/* Remove */}
                             <Button
                               variant="ghost"
@@ -687,7 +723,7 @@ export function BulkEntryDialog({
                 {saving ? "Saving..." : "Save"}
               </Button>
             </DialogFooter>
-          </>
+          </div>
         )}
       </DialogContent>
     </Dialog>
