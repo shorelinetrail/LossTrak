@@ -1704,6 +1704,33 @@ export default function DailyPage() {
                             )}
                           </div>
 
+                          {/* Assign all remaining */}
+                          {!isClosed && remaining > 0.01 && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-[1.75rem] px-1.5 text-[10px] text-muted-foreground shrink-0"
+                                  onClick={() => {
+                                    const otherTotal = lossEntries
+                                      .filter((e) => e.id !== entry.id)
+                                      .reduce((sum, e) => sum + (e.amount ?? 0), 0);
+                                    const assignAmount = Math.round((absDelta - otherTotal) * 100) / 100;
+                                    if (assignAmount > 0) {
+                                      handleUpdateLossEntry(entry.id, "amount", assignAmount);
+                                    }
+                                  }}
+                                >
+                                  = All
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p>Assign all remaining ({remaining.toLocaleString()} {productionUnit})</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+
                           {/* Comments */}
                           <Input
                             placeholder="Notes..."
