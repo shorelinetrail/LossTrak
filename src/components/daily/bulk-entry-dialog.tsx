@@ -558,7 +558,7 @@ export function BulkEntryDialog({
                               }
                               disabled={lossDisabled || isSkipped}
                             >
-                              <SelectTrigger className="h-7 text-xs w-[130px]">
+                              <SelectTrigger className="!h-7 text-xs w-[130px]">
                                 <SelectValue placeholder="Category" />
                               </SelectTrigger>
                               <SelectContent>
@@ -588,7 +588,7 @@ export function BulkEntryDialog({
                                 !loss.categoryId || lossDisabled || isSkipped
                               }
                             >
-                              <SelectTrigger className="h-7 text-xs w-[130px]">
+                              <SelectTrigger className="!h-7 text-xs w-[130px]">
                                 <SelectValue placeholder="Subcategory" />
                               </SelectTrigger>
                               <SelectContent>
