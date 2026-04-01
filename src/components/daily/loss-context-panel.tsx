@@ -60,6 +60,7 @@ interface LossContextPanelProps {
   todayDelta?: number;
   onCarryForward: (entries: LossEntry[], withAmounts?: boolean) => void;
   disabled?: boolean;
+  defaultExpanded?: boolean;
 }
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -117,8 +118,9 @@ export function LossContextPanel({
   todayDelta,
   onCarryForward,
   disabled = false,
+  defaultExpanded = false,
 }: LossContextPanelProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [timeRange, setTimeRange] = useState<TimeRange>(7);
   const [lossTypeFilter, setLossTypeFilter] = useState<LossTypeFilter>("all");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
@@ -442,6 +444,7 @@ export function LossContextPanel({
               size="sm"
               className="h-7 w-7 p-0"
               onClick={() => setExpanded(!expanded)}
+              aria-label={expanded ? "Collapse" : "Expand"}
             >
               {expanded ? (
                 <ChevronUp className="h-4 w-4" />

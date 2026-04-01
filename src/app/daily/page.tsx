@@ -1243,7 +1243,7 @@ export default function DailyPage() {
             onClick={handleBackToTable}
           >
             <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-            All Days
+            Back
           </Button>
         </div>
         <div className="flex items-center gap-1">
@@ -1515,21 +1515,25 @@ export default function DailyPage() {
 
           {/* Production Edit */}
           {!isClosed && (
-            <div className="flex items-center gap-2">
-              <Label htmlFor="production-edit" className="text-xs text-muted-foreground whitespace-nowrap">
-                Production ({productionUnit})
-              </Label>
-              <Input
-                id="production-edit"
-                type="number"
-                min="0"
-                step="any"
-                className="h-7 text-xs max-w-[160px]"
-                value={productionInput}
-                onChange={(e) => handleUpdateProduction(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-              />
-            </div>
+            <Card className="border-primary/30 bg-primary/5">
+              <CardContent className="px-3 py-2">
+                <div className="flex items-center gap-3">
+                  <Label htmlFor="production-edit" className="text-sm font-medium whitespace-nowrap">
+                    Production ({productionUnit})
+                  </Label>
+                  <Input
+                    id="production-edit"
+                    type="number"
+                    min="0"
+                    step="any"
+                    className="h-9 text-base font-medium max-w-[200px]"
+                    value={productionInput}
+                    onChange={(e) => handleUpdateProduction(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Loss / Gain Entries */}
@@ -1742,13 +1746,7 @@ export default function DailyPage() {
                 />
               </div>
               {!isClosed && (
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {isBalanced
-                      ? "Ready to close."
-                      : `${Math.abs(remaining).toLocaleString()} ${productionUnit} remaining.`}
-                  </p>
-                  <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-end gap-1.5">
                     <Button
                       variant="outline"
                       size="sm"
@@ -1767,7 +1765,6 @@ export default function DailyPage() {
                       <CheckCircle2 className="h-3 w-3 mr-1" />
                       Close Day
                     </Button>
-                  </div>
                 </div>
               )}
             </CardContent>
