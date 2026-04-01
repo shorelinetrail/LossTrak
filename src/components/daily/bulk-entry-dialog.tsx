@@ -29,7 +29,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Select,
   SelectContent,
@@ -451,7 +450,7 @@ export function BulkEntryDialog({
             </div>
 
             {/* Scrollable day rows */}
-            <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-6 px-6">
               <div className="space-y-3 py-1">
                 {rows.map((row, ri) => {
                   const prodDisabled = sameProduction && ri > 0;
@@ -667,7 +666,7 @@ export function BulkEntryDialog({
                   );
                 })}
               </div>
-            </ScrollArea>
+            </div>
 
             {/* Footer */}
             <DialogFooter className="border-t pt-3">
