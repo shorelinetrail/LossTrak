@@ -1709,9 +1709,9 @@ export default function DailyPage() {
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
+                                  variant="outline"
                                   size="sm"
-                                  className="h-[1.75rem] px-1.5 text-[10px] text-muted-foreground shrink-0"
+                                  className="h-7 px-2 text-[10px] font-medium text-muted-foreground shrink-0"
                                   onClick={() => {
                                     const otherTotal = lossEntries
                                       .filter((e) => e.id !== entry.id)
