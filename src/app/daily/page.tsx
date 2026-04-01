@@ -209,7 +209,7 @@ export default function DailyPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("all");
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [page, setPage] = useState(0);
-  const PAGE_SIZE = 31;
+  const [pageSize, setPageSize] = useState(31);
 
   // ── Selected-day entry state ─────────────────────────────────
   // null = table view, Date = entry form for that date
@@ -354,14 +354,14 @@ export default function DailyPage() {
   }, [allLogs, statusFilter, filterStartDate, filterEndDate, sortCol, sortDir, viewMode, viewMonth]);
 
   // Pagination
-  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
   const paginatedLogs = useMemo(() => {
-    const start = page * PAGE_SIZE;
-    return filteredLogs.slice(start, start + PAGE_SIZE);
+    const start = page * pageSize;
+    return filteredLogs.slice(start, start + pageSize);
   }, [filteredLogs, page]);
 
   // Reset page when filters change
-  useEffect(() => { setPage(0); }, [statusFilter, filterStartDate, filterEndDate, viewMode, viewMonth]);
+  useEffect(() => { setPage(0); }, [statusFilter, filterStartDate, filterEndDate, viewMode, viewMonth, pageSize]);
 
   const handleSort = useCallback(
     (col: SortColumn) => {
@@ -498,7 +498,7 @@ export default function DailyPage() {
     } finally {
       setSaving(false);
     }
-  }, [productionInput, dateKey, bar, refreshLogTable]);
+  }, [productionInput, dateKey, bar, selectedPlantId, refreshLogTable]);
 
   const handleUpdateProduction = useCallback(
     async (value: string) => {
@@ -895,7 +895,10 @@ export default function DailyPage() {
               {/* View mode */}
               <Select
                 value={viewMode}
-                onValueChange={(v) => setViewMode(v as ViewMode)}
+                onValueChange={(v) => {
+                  setViewMode(v as ViewMode);
+                  if (v === "month") { setFilterStartDate(""); setFilterEndDate(""); }
+                }}
               >
                 <SelectTrigger className="h-7 py-0 text-xs w-[95px]">
                   <SelectValue />
@@ -946,20 +949,26 @@ export default function DailyPage() {
                 </SelectContent>
               </Select>
 
-              {/* Date range filter */}
-              <input
-                type="date"
-                value={filterStartDate}
-                onChange={(e) => setFilterStartDate(e.target.value)}
-                className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
-              />
-              <span className="text-xs text-muted-foreground">to</span>
-              <input
-                type="date"
-                value={filterEndDate}
-                onChange={(e) => setFilterEndDate(e.target.value)}
-                className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
-              />
+              {/* Date range filter (hidden in month mode) */}
+              {viewMode !== "month" && (
+                <>
+                  <input
+                    type="date"
+                    value={filterStartDate}
+                    max={filterEndDate || undefined}
+                    onChange={(e) => setFilterStartDate(e.target.value)}
+                    className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input
+                    type="date"
+                    value={filterEndDate}
+                    min={filterStartDate || undefined}
+                    onChange={(e) => setFilterEndDate(e.target.value)}
+                    className="h-7 rounded-md border border-input bg-transparent px-2 text-xs"
+                  />
+                </>
+              )}
               {hasFilters && (
                 <Button
                   variant="ghost"
@@ -1126,36 +1135,50 @@ export default function DailyPage() {
             )}
 
             {/* Pagination */}
-            {filteredLogs.length > PAGE_SIZE && (
+            {filteredLogs.length > 0 && (
               <div className="flex items-center justify-between pt-2 border-t mt-2">
-                <span className="text-[10px] text-muted-foreground">
-                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredLogs.length)} of {filteredLogs.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-xs px-2"
-                    disabled={page === 0}
-                    onClick={() => setPage((p) => p - 1)}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">Rows</span>
+                  <select
+                    className="h-6 rounded border border-input bg-transparent px-1 text-[10px]"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
                   >
-                    <ChevronLeft className="h-3 w-3 mr-0.5" />
-                    Prev
-                  </Button>
-                  <span className="text-[10px] text-muted-foreground px-1.5">
-                    {page + 1} / {totalPages}
+                    {[10, 20, 31, 50, 100].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span className="text-[10px] text-muted-foreground">
+                    {page * pageSize + 1}–{Math.min((page + 1) * pageSize, filteredLogs.length)} of {filteredLogs.length}
                   </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-xs px-2"
-                    disabled={page >= totalPages - 1}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next
-                    <ChevronRight className="h-3 w-3 ml-0.5" />
-                  </Button>
                 </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-xs px-2"
+                      disabled={page === 0}
+                      onClick={() => setPage((p) => p - 1)}
+                    >
+                      <ChevronLeft className="h-3 w-3 mr-0.5" />
+                      Prev
+                    </Button>
+                    <span className="text-[10px] text-muted-foreground px-1.5">
+                      {page + 1} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 text-xs px-2"
+                      disabled={page >= totalPages - 1}
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      Next
+                      <ChevronRight className="h-3 w-3 ml-0.5" />
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
