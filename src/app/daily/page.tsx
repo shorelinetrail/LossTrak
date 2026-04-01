@@ -287,6 +287,37 @@ export default function DailyPage() {
     init();
   }, [selectedPlantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-create today's daily log if it doesn't exist ───────
+  const ensureTodayLog = useCallback(async () => {
+    if (!selectedPlantId) return;
+    const todayKey = format(new Date(), "yyyy-MM-dd");
+    try {
+      const existing = await getDailyLog(selectedPlantId, todayKey);
+      if (!existing) {
+        const currentBar = await getBarRate(selectedPlantId);
+        await createDailyLog({
+          plantId: selectedPlantId,
+          date: todayKey,
+          production: 0,
+          bar: currentBar,
+          comments: "",
+          status: "open",
+        });
+        await loadAllLogs();
+      }
+    } catch {
+      // silently fail — user can create manually
+    }
+  }, [selectedPlantId, loadAllLogs]);
+
+  useEffect(() => {
+    if (!selectedPlantId) return;
+    ensureTodayLog();
+    // Check again every 10 minutes (catches midnight rollover)
+    const interval = setInterval(ensureTodayLog, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [selectedPlantId, ensureTodayLog]);
+
   // ── Load selected day when date changes ──────────────────────
   useEffect(() => {
     if (!dateKey) {
