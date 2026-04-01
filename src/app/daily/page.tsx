@@ -1066,7 +1066,7 @@ export default function DailyPage() {
                       </TableHead>
                       {(
                         [
-                          ["date", "Date", "text-left"],
+                          ["date", "Date", "text-left w-[140px]"],
                           ["production", "Production", "text-right"],
                           ["bar", "BAR", "text-right"],
                           ["delta", "Delta", "text-right"],
@@ -1515,7 +1515,7 @@ export default function DailyPage() {
 
           {/* Production Edit */}
           {!isClosed && (
-            <Card className="border-primary/30 bg-primary/5">
+            <Card className="border-primary/30">
               <CardContent className="px-3 py-2">
                 <div className="flex items-center gap-3">
                   <Label htmlFor="production-edit" className="text-sm font-medium whitespace-nowrap">
