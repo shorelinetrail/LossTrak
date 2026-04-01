@@ -90,7 +90,7 @@ import {
   ChevronsUpDown,
   Check,
 } from "lucide-react";
-import { format, parseISO, addDays, subDays, isToday } from "date-fns";
+import { format, parseISO, addDays, subDays, isToday, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { usePlant } from "@/components/plant-context";
@@ -203,6 +203,13 @@ export default function DailyPage() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const lastCheckedRef = useRef<string | null>(null);
+
+  // ── Pagination / view mode ─────────────────────────────────
+  type ViewMode = "all" | "month";
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 31;
 
   // ── Selected-day entry state ─────────────────────────────────
   // null = table view, Date = entry form for that date
@@ -318,6 +325,14 @@ export default function DailyPage() {
   // ── Sorted + filtered log table ──────────────────────────────
   const filteredLogs = useMemo(() => {
     let rows = allLogs;
+
+    // Month view filter
+    if (viewMode === "month") {
+      const monthStart = format(viewMonth, "yyyy-MM-dd");
+      const monthEnd = format(endOfMonth(viewMonth), "yyyy-MM-dd");
+      rows = rows.filter((l) => l.date >= monthStart && l.date <= monthEnd);
+    }
+
     if (statusFilter !== "all") {
       rows = rows.filter((l) => l.status === statusFilter);
     }
@@ -336,7 +351,17 @@ export default function DailyPage() {
       return ((av as number) - (bv as number)) * dir;
     });
     return rows;
-  }, [allLogs, statusFilter, filterStartDate, filterEndDate, sortCol, sortDir]);
+  }, [allLogs, statusFilter, filterStartDate, filterEndDate, sortCol, sortDir, viewMode, viewMonth]);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / PAGE_SIZE));
+  const paginatedLogs = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return filteredLogs.slice(start, start + PAGE_SIZE);
+  }, [filteredLogs, page]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(0); }, [statusFilter, filterStartDate, filterEndDate, viewMode, viewMonth]);
 
   const handleSort = useCallback(
     (col: SortColumn) => {
@@ -866,6 +891,47 @@ export default function DailyPage() {
           <CardContent className="px-3 py-2">
             <div className="flex flex-wrap items-center gap-2 mb-2">
               <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+
+              {/* View mode */}
+              <Select
+                value={viewMode}
+                onValueChange={(v) => setViewMode(v as ViewMode)}
+              >
+                <SelectTrigger className="h-7 text-xs w-[90px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Days</SelectItem>
+                  <SelectItem value="month">By Month</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {/* Month navigation (shown when viewMode === "month") */}
+              {viewMode === "month" && (
+                <div className="flex items-center gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setViewMonth((m) => subMonths(m, 1))}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="text-xs font-medium w-[90px] text-center">
+                    {format(viewMonth, "MMM yyyy")}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0"
+                    onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Status filter */}
               <Select
                 value={statusFilter}
                 onValueChange={(v) => setStatusFilter(v as StatusFilter)}
@@ -879,6 +945,8 @@ export default function DailyPage() {
                   <SelectItem value="closed">Closed</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Date range filter */}
               <input
                 type="date"
                 value={filterStartDate}
@@ -984,7 +1052,7 @@ export default function DailyPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredLogs.map((log) => (
+                    {paginatedLogs.map((log) => (
                       <TableRow
                         key={log.date}
                         className={cn("cursor-pointer", selectedIds.has(log.id) && "bg-muted/50")}
@@ -1054,6 +1122,40 @@ export default function DailyPage() {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+            )}
+
+            {/* Pagination */}
+            {filteredLogs.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between pt-2 border-t mt-2">
+                <span className="text-[10px] text-muted-foreground">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filteredLogs.length)} of {filteredLogs.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-xs px-2"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    <ChevronLeft className="h-3 w-3 mr-0.5" />
+                    Prev
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground px-1.5">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-6 text-xs px-2"
+                    disabled={page >= totalPages - 1}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                    <ChevronRight className="h-3 w-3 ml-0.5" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
