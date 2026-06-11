@@ -17,6 +17,7 @@ import {
   ChevronDown,
   ChevronRight,
   Activity,
+  LineChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -39,6 +40,7 @@ const navigation: (NavItem | NavGroup)[] = [
     label: "Reports",
     icon: BarChart3,
     items: [
+      { label: "Analysis", href: "/reports/analysis", icon: LineChart },
       { label: "Monthly", href: "/reports/monthly", icon: CalendarDays },
       { label: "Quarterly", href: "/reports/quarterly", icon: CalendarRange },
       { label: "Yearly", href: "/reports/yearly", icon: CalendarClock },
