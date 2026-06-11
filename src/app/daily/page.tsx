@@ -365,6 +365,7 @@ export default function DailyPage() {
           setProductionInput("");
           setDayComments("");
           setLossEntries([]);
+          setEntryUnits({});
         }
         const history = await getRecentHistory(selectedPlantId!, dateKey, 30);
         setRecentHistory(history);
@@ -1725,8 +1726,8 @@ export default function DailyPage() {
                       ? entry.amount || ""
                       : unit === "hours" && entry.durationHours != null
                         ? entry.durationHours
-                        : unit === "days" && entry.durationHours != null
-                          ? parseFloat((entry.durationHours / 24).toFixed(4))
+                        : unit === "days" && entry.durationHours != null && operatingHours > 0
+                          ? parseFloat((entry.durationHours / operatingHours).toFixed(4))
                           : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
                     const singleType = allowedTypes.length === 1;
 
@@ -1831,10 +1832,16 @@ export default function DailyPage() {
                                 onChange={(e) => {
                                   const raw = parseFloat(e.target.value) || 0;
                                   const inProdUnits = toProductionUnits(raw, unit);
+                                  // Duration is stored in operating hours, so
+                                  // one "day" = one operating day (bar ÷ hourly rate).
                                   handleUpdateLossEntry(entry.id, {
                                     amount: Math.round(inProdUnits * 100) / 100,
                                     durationHours:
-                                      unit === "hours" ? raw : unit === "days" ? raw * 24 : null,
+                                      unit === "hours"
+                                        ? raw
+                                        : unit === "days"
+                                          ? raw * operatingHours
+                                          : null,
                                   });
                                 }}
                                 disabled={isClosed}
