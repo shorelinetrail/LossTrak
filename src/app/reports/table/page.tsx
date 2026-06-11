@@ -1,15 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  getDailyLogsByDateRange,
-  getAllLossEntries,
-  getCategories,
-  getSubcategories,
-  getProductionUnit,
-} from "@/lib/store";
+import { useState, useMemo, useCallback } from "react";
 import { usePlant } from "@/components/plant-context";
-import { DailyLog, LossEntry, LossCategory, LossSubcategory } from "@/types";
 import {
   Card,
   CardContent,
@@ -33,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Download } from "lucide-react";
 import {
   format,
   startOfMonth,
@@ -48,15 +40,18 @@ import {
   getYear,
 } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  MONTH_NAMES,
+  computeKpis,
+  summarizeByCategory,
+  summarizeBySubcategory,
+} from "@/lib/reports/aggregate";
+import { useReportData } from "@/lib/reports/use-report-data";
+import { exportReportToExcel } from "@/lib/reports/export";
 
 type ViewMode = "day" | "month" | "year";
 
 type SectionKey = "summary" | "category" | "subcategory" | "breakdown";
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 const GRADE_SLATE_NAME = "Grade Slate";
 const PLANNED_CATEGORY_NAME = "Business";
@@ -109,12 +104,6 @@ export default function TableReportPage() {
   const [selectedYear, setSelectedYear] = useState<number>(getYear(now));
   const [selectedDay, setSelectedDay] = useState<string>(format(now, "yyyy-MM-dd"));
 
-  const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
-  const [allLossEntries, setAllLossEntries] = useState<LossEntry[]>([]);
-  const [categories, setCategories] = useState<LossCategory[]>([]);
-  const [subcategories, setSubcategories] = useState<LossSubcategory[]>([]);
-  const [productionUnit, setProductionUnit] = useState<string>("tonnes");
-
   const [openSections, setOpenSections] = useState<Record<SectionKey, boolean>>({
     summary: true,
     category: false,
@@ -162,6 +151,9 @@ export default function TableReportPage() {
     return { rangeStart: startOfYear(anchor), rangeEnd: endOfYear(anchor) };
   }, [viewMode, safeSelectedDay, selectedMonth, selectedYear]);
 
+  const { logs, entries, categories, subcategories, productionUnit, loading } =
+    useReportData(selectedPlantId, rangeStart, rangeEnd);
+
   const handlePrev = () => {
     if (viewMode === "day") {
       const d = new Date(safeSelectedDay);
@@ -196,48 +188,8 @@ export default function TableReportPage() {
     }
   };
 
-  useEffect(() => {
-    async function load() {
-      if (!selectedPlantId) return;
-      const unit = await getProductionUnit(selectedPlantId);
-      if (unit) setProductionUnit(unit);
-      const cats = await getCategories();
-      setCategories(cats);
-      const subs = await getSubcategories(selectedPlantId);
-      setSubcategories(subs);
-    }
-    load();
-  }, [selectedPlantId]);
-
-  useEffect(() => {
-    async function load() {
-      if (!selectedPlantId) return;
-      const startStr = format(rangeStart, "yyyy-MM-dd");
-      const endStr = format(rangeEnd, "yyyy-MM-dd");
-      const logs = await getDailyLogsByDateRange(selectedPlantId, startStr, endStr);
-      setDailyLogs(logs);
-      const allLosses = await getAllLossEntries(selectedPlantId);
-      const filtered = allLosses.filter((entry) => {
-        const entryDate = parseISO(entry.date);
-        return entryDate >= rangeStart && entryDate <= rangeEnd;
-      });
-      setAllLossEntries(filtered);
-    }
-    load();
-  }, [selectedPlantId, rangeStart, rangeEnd]);
-
-  const totalProduction = useMemo(
-    () => dailyLogs.reduce((sum, log) => sum + (log.production ?? 0), 0),
-    [dailyLogs]
-  );
-  const totalBAR = useMemo(
-    () => dailyLogs.reduce((sum, log) => sum + (log.bar ?? 0), 0),
-    [dailyLogs]
-  );
-  const totalLosses = useMemo(
-    () => allLossEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0),
-    [allLossEntries]
-  );
+  const kpis = useMemo(() => computeKpis(logs, entries), [logs, entries]);
+  const { totalProduction, totalBAR, totalLosses } = kpis;
 
   const gradeSlateId = useMemo(
     () => categories.find((c) => c.name === GRADE_SLATE_NAME)?.id,
@@ -250,54 +202,31 @@ export default function TableReportPage() {
 
   const gradeSlateLoss = useMemo(
     () =>
-      allLossEntries
+      entries
         .filter((e) => e.categoryId === gradeSlateId)
         .reduce((sum, e) => sum + (e.amount ?? 0), 0),
-    [allLossEntries, gradeSlateId]
+    [entries, gradeSlateId]
   );
 
   const plannedLoss = useMemo(
     () =>
-      allLossEntries
+      entries
         .filter((e) => e.categoryId === plannedCategoryId)
         .reduce((sum, e) => sum + (e.amount ?? 0), 0),
-    [allLossEntries, plannedCategoryId]
+    [entries, plannedCategoryId]
   );
 
   const ctp = totalBAR - gradeSlateLoss - plannedLoss;
 
-  const categorySummary = useMemo(() => {
-    return categories.map((cat) => {
-      const catEntries = allLossEntries.filter((e) => e.categoryId === cat.id);
-      const shutdown = catEntries
-        .filter((e) => e.lossType === "shutdown")
-        .reduce((sum, e) => sum + (e.amount ?? 0), 0);
-      const slowdown = catEntries
-        .filter((e) => e.lossType === "slowdown")
-        .reduce((sum, e) => sum + (e.amount ?? 0), 0);
-      const total = shutdown + slowdown;
-      return { id: cat.id, name: cat.name, shutdown, slowdown, total };
-    });
-  }, [categories, allLossEntries]);
+  const categorySummary = useMemo(
+    () => summarizeByCategory(entries, categories, totalLosses),
+    [entries, categories, totalLosses]
+  );
 
-  const subcategorySummary = useMemo(() => {
-    return categories.map((cat) => {
-      const catEntries = allLossEntries.filter((e) => e.categoryId === cat.id);
-      const subsInCat = subcategories
-        .filter((s) => s.categoryId === cat.id)
-        .map((sub) => {
-          const subEntries = catEntries.filter((e) => e.subcategoryId === sub.id);
-          const shutdown = subEntries
-            .filter((e) => e.lossType === "shutdown")
-            .reduce((sum, e) => sum + (e.amount ?? 0), 0);
-          const slowdown = subEntries
-            .filter((e) => e.lossType === "slowdown")
-            .reduce((sum, e) => sum + (e.amount ?? 0), 0);
-          return { id: sub.id, name: sub.name, shutdown, slowdown, total: shutdown + slowdown };
-        });
-      return { categoryId: cat.id, categoryName: cat.name, subcategories: subsInCat };
-    });
-  }, [categories, subcategories, allLossEntries]);
+  const subcategorySummary = useMemo(
+    () => summarizeBySubcategory(entries, categories, subcategories, totalLosses),
+    [entries, categories, subcategories, totalLosses]
+  );
 
   const periodBreakdown = useMemo(() => {
     if (viewMode === "day") return [];
@@ -306,8 +235,8 @@ export default function TableReportPage() {
       const days = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
       return days.map((day) => {
         const dateStr = format(day, "yyyy-MM-dd");
-        const log = dailyLogs.find((l) => l.date === dateStr);
-        const dayEntries = allLossEntries.filter((e) => e.date === dateStr);
+        const log = logs.find((l) => l.date === dateStr);
+        const dayEntries = entries.filter((e) => e.date === dateStr);
         const shutdown = dayEntries
           .filter((e) => e.lossType === "shutdown")
           .reduce((sum, e) => sum + (e.amount ?? 0), 0);
@@ -335,8 +264,8 @@ export default function TableReportPage() {
     const months = eachMonthOfInterval({ start: rangeStart, end: rangeEnd });
     return months.map((month) => {
       const monthStr = format(month, "yyyy-MM");
-      const monthLogs = dailyLogs.filter((l) => l.date.startsWith(monthStr));
-      const monthEntries = allLossEntries.filter((e) => e.date.startsWith(monthStr));
+      const monthLogs = logs.filter((l) => l.date.startsWith(monthStr));
+      const monthEntries = entries.filter((e) => e.date.startsWith(monthStr));
       const bar = monthLogs.reduce((s, l) => s + (l.bar ?? 0), 0);
       const production = monthLogs.reduce((s, l) => s + (l.production ?? 0), 0);
       const shutdown = monthEntries
@@ -358,13 +287,31 @@ export default function TableReportPage() {
         ctp: bar - gs - pl,
       };
     });
-  }, [viewMode, rangeStart, rangeEnd, dailyLogs, allLossEntries, gradeSlateId, plannedCategoryId]);
+  }, [viewMode, rangeStart, rangeEnd, logs, entries, gradeSlateId, plannedCategoryId]);
 
   const periodLabel = useMemo(() => {
     if (viewMode === "day") return format(safeSelectedDay, "dd MMMM yyyy");
-    if (viewMode === "month") return `${MONTHS[selectedMonth]} ${selectedYear}`;
+    if (viewMode === "month") return `${MONTH_NAMES[selectedMonth]} ${selectedYear}`;
     return String(selectedYear);
   }, [viewMode, safeSelectedDay, selectedMonth, selectedYear]);
+
+  const handleExport = () => {
+    const periodSlug =
+      viewMode === "day"
+        ? format(safeSelectedDay, "yyyy-MM-dd")
+        : viewMode === "month"
+          ? format(rangeStart, "yyyy-MM")
+          : String(selectedYear);
+    exportReportToExcel({
+      filename: `losstrak-table-${periodSlug}`,
+      periodLabel,
+      productionUnit,
+      kpis,
+      categorySummary,
+      subcategorySummary,
+      logs,
+    });
+  };
 
   if (!selectedPlantId) {
     return (
@@ -433,7 +380,7 @@ export default function TableReportPage() {
                     <SelectValue placeholder="Month" />
                   </SelectTrigger>
                   <SelectContent>
-                    {MONTHS.map((month, idx) => (
+                    {MONTH_NAMES.map((month, idx) => (
                       <SelectItem key={idx} value={String(idx)}>
                         {month}
                       </SelectItem>
@@ -461,6 +408,11 @@ export default function TableReportPage() {
 
           <Button variant="outline" size="icon" className="h-9 w-9" onClick={handleNext}>
             <ChevronRight className="h-4 w-4" />
+          </Button>
+
+          <Button variant="outline" className="h-9" onClick={handleExport} disabled={loading}>
+            <Download className="h-4 w-4 mr-1.5" />
+            Export
           </Button>
         </div>
       </div>
@@ -558,7 +510,7 @@ export default function TableReportPage() {
           open={openSections.category}
           onToggle={(e) => toggleSection("category", e)}
         >
-          {categorySummary.every((r) => r.total === 0) ? (
+          {categorySummary.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No loss data for this period.
             </p>
@@ -581,22 +533,19 @@ export default function TableReportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {categorySummary
-                  .filter((r) => r.total > 0)
-                  .sort((a, b) => b.total - a.total)
-                  .map((row) => (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="text-right">{fmtNum(row.shutdown)}</TableCell>
-                      <TableCell className="text-right">{fmtNum(row.slowdown)}</TableCell>
-                      <TableCell className="text-right font-semibold">{fmtNum(row.total)}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={totalLosses > 0 && row.total / totalLosses > 0.25 ? "destructive" : "secondary"}>
-                          {fmtPct(row.total, totalLosses)}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                {categorySummary.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell className="text-right">{fmtNum(row.shutdown)}</TableCell>
+                    <TableCell className="text-right">{fmtNum(row.slowdown)}</TableCell>
+                    <TableCell className="text-right font-semibold">{fmtNum(row.total)}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={totalLosses > 0 && row.total / totalLosses > 0.25 ? "destructive" : "secondary"}>
+                        {fmtPct(row.total, totalLosses)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
                 <TableRow className="font-bold border-t-2">
                   <TableCell>Total</TableCell>
                   <TableCell className="text-right">
@@ -621,7 +570,7 @@ export default function TableReportPage() {
           open={openSections.subcategory}
           onToggle={(e) => toggleSection("subcategory", e)}
         >
-          {subcategorySummary.every((g) => g.subcategories.every((s) => s.total === 0)) ? (
+          {subcategorySummary.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
               No subcategory loss data for this period.
             </p>
@@ -644,31 +593,26 @@ export default function TableReportPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {subcategorySummary
-                  .filter((g) => g.subcategories.some((s) => s.total > 0))
-                  .flatMap((group) => [
-                    <TableRow key={`cat-${group.categoryId}`} className="bg-muted/50">
-                      <TableCell colSpan={5} className="font-semibold text-sm py-2">
-                        {group.categoryName}
+                {subcategorySummary.flatMap((group) => [
+                  <TableRow key={`cat-${group.categoryId}`} className="bg-muted/50">
+                    <TableCell colSpan={5} className="font-semibold text-sm py-2">
+                      {group.categoryName}
+                    </TableCell>
+                  </TableRow>,
+                  ...group.subcategories.map((sub) => (
+                    <TableRow key={`${group.categoryId}-${sub.name}`}>
+                      <TableCell className="pl-6">{sub.name}</TableCell>
+                      <TableCell className="text-right">{fmtNum(sub.shutdown)}</TableCell>
+                      <TableCell className="text-right">{fmtNum(sub.slowdown)}</TableCell>
+                      <TableCell className="text-right font-medium">{fmtNum(sub.total)}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="outline">
+                          {fmtPct(sub.total, totalLosses)}
+                        </Badge>
                       </TableCell>
-                    </TableRow>,
-                    ...group.subcategories
-                      .filter((s) => s.total > 0)
-                      .sort((a, b) => b.total - a.total)
-                      .map((sub) => (
-                        <TableRow key={sub.id}>
-                          <TableCell className="pl-6">{sub.name}</TableCell>
-                          <TableCell className="text-right">{fmtNum(sub.shutdown)}</TableCell>
-                          <TableCell className="text-right">{fmtNum(sub.slowdown)}</TableCell>
-                          <TableCell className="text-right font-medium">{fmtNum(sub.total)}</TableCell>
-                          <TableCell className="text-right">
-                            <Badge variant="outline">
-                              {fmtPct(sub.total, totalLosses)}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      )),
-                  ])}
+                    </TableRow>
+                  )),
+                ])}
               </TableBody>
             </Table>
           )}
