@@ -1,8 +1,15 @@
 "use client";
 
 import { useTheme } from "next-themes";
-import { Sun, Moon, Monitor, Building2, ChevronDown, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Sun, Moon, Monitor, Building2, ChevronDown, Check, LogOut } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +35,17 @@ function useMounted() {
 
 export function TopBar() {
   const { setTheme, theme } = useTheme();
+  const router = useRouter();
   const mounted = useMounted();
+
+  const handleSignOut = async () => {
+    try {
+      await createClient().auth.signOut();
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  };
   const {
     sites,
     plants,
@@ -119,6 +136,20 @@ export function TopBar() {
             </DropdownMenuContent>
           </DropdownMenu>
         )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="sr-only">Sign out</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">Sign out</TooltipContent>
+        </Tooltip>
       </div>
     </header>
   );
