@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-import { StoreInitializer } from "@/components/store-initializer";
 import { PlantProvider } from "@/components/plant-context";
 import { AppShell } from "@/components/layout/app-shell";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -23,7 +22,6 @@ export default function RootLayout({
       <body className="antialiased font-sans">
         <ThemeProvider>
           <TooltipProvider>
-            <StoreInitializer />
             <PlantProvider>
               <AppShell>{children}</AppShell>
             </PlantProvider>

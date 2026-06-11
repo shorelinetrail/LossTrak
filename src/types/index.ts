@@ -71,6 +71,8 @@ export interface LossEntry {
   detailCodeId: string; // optional third level below subcategory
   lossType: LossType;
   amount: number;
+  /** Optional duration in hours, kept alongside the converted amount. */
+  durationHours?: number | null;
   comments: string;
   createdAt: string;
 }
