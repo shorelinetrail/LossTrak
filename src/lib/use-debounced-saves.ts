@@ -57,7 +57,9 @@ export function useDebouncedSaves(delay = 600) {
   }, []);
 
   const flushRef = useRef(flush);
-  flushRef.current = flush;
+  useEffect(() => {
+    flushRef.current = flush;
+  });
   useEffect(() => () => flushRef.current(), []);
 
   return { schedule, flush, cancel };

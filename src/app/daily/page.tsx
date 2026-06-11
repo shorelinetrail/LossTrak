@@ -352,6 +352,15 @@ export default function DailyPage() {
           setDayComments(log.comments ?? "");
           const entries = await getLossEntries(selectedPlantId!, dateKey);
           setLossEntries(entries);
+          // Entries saved with a duration default their toggle to hours
+          // so the stored duration is what's displayed.
+          setEntryUnits(
+            Object.fromEntries(
+              entries
+                .filter((e) => e.durationHours !== null && e.durationHours !== undefined)
+                .map((e) => [e.id, "hours" as const])
+            )
+          );
         } else {
           setProductionInput("");
           setDayComments("");
@@ -581,74 +590,150 @@ export default function DailyPage() {
     [dailyLog, dateKey, scheduleSave]
   );
 
-  const handleAddLossEntry = useCallback(async () => {
-    if (!dailyLog) return;
-    try {
-      const entry = await createLossEntry({
-        plantId: selectedPlantId!,
-        dailyLogId: dailyLog.id,
-        date: dateKey,
-        categoryId: "",
-        subcategoryId: "",
-        detailCodeId: "",
-        lossType: "shutdown" as LossType,
-        amount: 0,
-        comments: "",
-      });
-      setLossEntries((prev) => [...prev, entry]);
-      await refreshLogTable();
-    } catch (err) {
-      console.error("Failed to add loss entry:", err);
-      const msg = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to add loss entry: ${msg}`);
+  // New rows start as local drafts and are only written to the database
+  // once a category is chosen, so abandoned rows never pollute the data.
+  const isDraftId = (id: string) => id.startsWith("draft-");
+  const persistingDrafts = useRef(new Set<string>());
+  const pendingDraftUpdates = useRef(new Map<string, Partial<LossEntry>>());
+  const [focusEntryId, setFocusEntryId] = useState<string | null>(null);
+  const categoryTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const commentsRefs = useRef(new Map<string, HTMLInputElement>());
+
+  // Focus the category selector of a freshly added row (keyboard flow:
+  // Enter in comments → new row → pick category without the mouse).
+  useEffect(() => {
+    if (!focusEntryId) return;
+    const el = categoryTriggerRefs.current.get(focusEntryId);
+    if (el) {
+      el.focus();
+      setFocusEntryId(null);
     }
-  }, [dailyLog, dateKey, refreshLogTable, selectedPlantId]);
+  }, [focusEntryId, lossEntries]);
+
+  const handleAddLossEntry = useCallback(() => {
+    if (!dailyLog) return;
+    const draft: LossEntry = {
+      id: `draft-${crypto.randomUUID()}`,
+      plantId: selectedPlantId!,
+      dailyLogId: dailyLog.id,
+      date: dateKey,
+      categoryId: "",
+      subcategoryId: "",
+      detailCodeId: "",
+      lossType: "shutdown" as LossType,
+      amount: 0,
+      durationHours: null,
+      comments: "",
+      createdAt: new Date().toISOString(),
+    };
+    setLossEntries((prev) => [...prev, draft]);
+    setFocusEntryId(draft.id);
+  }, [dailyLog, dateKey, selectedPlantId]);
+
+  const persistDraft = useCallback(
+    async (draft: LossEntry) => {
+      try {
+        const created = await createLossEntry({
+          plantId: draft.plantId,
+          dailyLogId: draft.dailyLogId,
+          date: draft.date,
+          categoryId: draft.categoryId,
+          subcategoryId: draft.subcategoryId,
+          detailCodeId: draft.detailCodeId,
+          lossType: draft.lossType,
+          amount: draft.amount,
+          durationHours: draft.durationHours,
+          comments: draft.comments,
+        });
+        // Swap the draft id for the database id, keeping any local edits
+        // made while the insert was in flight.
+        setLossEntries((prev) =>
+          prev.map((e) =>
+            e.id === draft.id
+              ? { ...e, id: created.id, createdAt: created.createdAt }
+              : e
+          )
+        );
+        setEntryUnits((prev) => {
+          const unit = prev[draft.id];
+          if (!unit) return prev;
+          const next = { ...prev };
+          delete next[draft.id];
+          next[created.id] = unit;
+          return next;
+        });
+        const pending = pendingDraftUpdates.current.get(draft.id);
+        persistingDrafts.current.delete(draft.id);
+        pendingDraftUpdates.current.delete(draft.id);
+        if (pending && Object.keys(pending).length > 0) {
+          await updateLossEntry(created.id, pending);
+        }
+        await refreshLogTable();
+      } catch (err) {
+        persistingDrafts.current.delete(draft.id);
+        pendingDraftUpdates.current.delete(draft.id);
+        console.error("Failed to add loss entry:", err);
+        const msg = err instanceof Error ? err.message : String(err);
+        toast.error(`Failed to add loss entry: ${msg}`);
+      }
+    },
+    [refreshLogTable]
+  );
 
   const handleUpdateLossEntry = useCallback(
-    async (entryId: string, field: string, value: string | number) => {
-      setLossEntries((prev) =>
-        prev.map((e) => {
-          if (e.id !== entryId) return e;
-          const updated = { ...e, [field]: value };
-          if (field === "categoryId") {
-            updated.subcategoryId = "";
-            updated.detailCodeId = "";
-          }
-          if (field === "subcategoryId") {
-            updated.detailCodeId = "";
-          }
-          return updated;
-        })
-      );
-      const updateData: Record<string, string | number> = { [field]: value };
-      if (field === "categoryId") {
+    (entryId: string, updates: Partial<LossEntry>) => {
+      const existing = lossEntries.find((e) => e.id === entryId);
+      if (!existing) return;
+      const updateData: Partial<LossEntry> = { ...updates };
+      if (updateData.categoryId !== undefined) {
         updateData.subcategoryId = "";
         updateData.detailCodeId = "";
-      }
-      if (field === "subcategoryId") {
+      } else if (updateData.subcategoryId !== undefined) {
         updateData.detailCodeId = "";
       }
+      const updated = { ...existing, ...updateData };
+      setLossEntries((prev) => prev.map((e) => (e.id === entryId ? updated : e)));
+
+      if (isDraftId(entryId)) {
+        if (persistingDrafts.current.has(entryId)) {
+          // Insert in flight — queue this change to apply once it lands.
+          const pending = pendingDraftUpdates.current.get(entryId) ?? {};
+          pendingDraftUpdates.current.set(entryId, { ...pending, ...updateData });
+        } else if (updated.categoryId) {
+          persistingDrafts.current.add(entryId);
+          void persistDraft(updated);
+        }
+        return;
+      }
+
       const persist = async () => {
         try {
           await updateLossEntry(entryId, updateData);
-          if (field === "amount") await refreshLogTable();
+          if (updateData.amount !== undefined) await refreshLogTable();
         } catch (err) {
           console.error("Failed to save loss entry:", err);
           toast.error("Failed to save loss entry.");
         }
       };
       // Typed fields debounce; select/toggle fields save immediately.
-      if (field === "amount" || field === "comments") {
-        scheduleSave(`entry:${entryId}:${field}`, persist);
+      if (updateData.amount !== undefined) {
+        scheduleSave(`entry:${entryId}:amount`, persist);
+      } else if (updateData.comments !== undefined) {
+        scheduleSave(`entry:${entryId}:comments`, persist);
       } else {
         void persist();
       }
     },
-    [refreshLogTable, scheduleSave]
+    [lossEntries, refreshLogTable, scheduleSave, persistDraft]
   );
 
   const handleDeleteLossEntry = useCallback(
     async (entryId: string) => {
+      if (isDraftId(entryId)) {
+        pendingDraftUpdates.current.delete(entryId);
+        setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
+        return;
+      }
       try {
         cancelSave(`entry:${entryId}:`);
         await deleteLossEntry(entryId);
@@ -665,6 +750,17 @@ export default function DailyPage() {
 
   const handleCloseDay = useCallback(async () => {
     if (!dailyLog || !isBalanced) return;
+    const incompleteDrafts = lossEntries.filter(
+      (e) => isDraftId(e.id) && e.amount > 0
+    );
+    if (incompleteDrafts.length > 0) {
+      toast.error(
+        "Some entries with amounts have no category. Pick a category or remove them before closing."
+      );
+      return;
+    }
+    // Empty drafts were never saved — drop them quietly.
+    setLossEntries((prev) => prev.filter((e) => !isDraftId(e.id)));
     try {
       setSaving(true);
       const updated = await updateDailyLog(dateKey, {
@@ -680,7 +776,7 @@ export default function DailyPage() {
     } finally {
       setSaving(false);
     }
-  }, [dailyLog, isBalanced, dateKey, dayComments, refreshLogTable]);
+  }, [dailyLog, isBalanced, dateKey, dayComments, refreshLogTable, lossEntries]);
 
   const handleReopenDay = useCallback(async () => {
     if (!dailyLog || dailyLog.status !== "closed") return;
@@ -1623,9 +1719,15 @@ export default function DailyPage() {
                     const hasDetailCodes = filteredDetailCodes.length > 0;
                     const unit = entryUnits[entry.id] || "production";
                     const unitLabel = unit === "hours" ? "hr" : unit === "days" ? "d" : productionUnit;
+                    // Prefer the stored duration over a back-conversion so the
+                    // hours the engineer typed are exactly what they see.
                     const displayValue = unit === "production"
                       ? entry.amount || ""
-                      : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
+                      : unit === "hours" && entry.durationHours != null
+                        ? entry.durationHours
+                        : unit === "days" && entry.durationHours != null
+                          ? parseFloat((entry.durationHours / 24).toFixed(4))
+                          : entry.amount ? parseFloat(fromProductionUnits(entry.amount, unit).toFixed(4)) : "";
                     const singleType = allowedTypes.length === 1;
 
                     return (
@@ -1646,19 +1748,25 @@ export default function DailyPage() {
                           <div className="flex flex-1 items-center gap-1.5">
                             {/* Category + Subcategory side-by-side with no gap */}
                             <div className="flex items-center gap-1.5">
-                              <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, "categoryId", v)} disabled={isClosed}>
-                                <SelectTrigger style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Category" /></SelectTrigger>
+                              <Select value={entry.categoryId} onValueChange={(v) => handleUpdateLossEntry(entry.id, { categoryId: v })} disabled={isClosed}>
+                                <SelectTrigger
+                                  ref={(el: HTMLButtonElement | null) => {
+                                    if (el) categoryTriggerRefs.current.set(entry.id, el);
+                                    else categoryTriggerRefs.current.delete(entry.id);
+                                  }}
+                                  style={{ width: categoryMinWidth, height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
+                                ><SelectValue placeholder="Category" /></SelectTrigger>
                                 <SelectContent style={{ fontSize: '0.75rem' }}>{categories.map((cat) => (<SelectItem key={cat.id} value={cat.id} className="text-xs">{cat.name}</SelectItem>))}</SelectContent>
                               </Select>
                               <SubcategoryCombobox
                                 value={entry.subcategoryId}
-                                onValueChange={(v) => handleUpdateLossEntry(entry.id, "subcategoryId", v)}
+                                onValueChange={(v) => handleUpdateLossEntry(entry.id, { subcategoryId: v })}
                                 subcategories={filteredSubcategories}
                                 disabled={isClosed || !entry.categoryId}
                               />
                             </div>
                             {hasDetailCodes && (
-                              <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, "detailCodeId", v)} disabled={isClosed}>
+                              <Select value={entry.detailCodeId || ""} onValueChange={(v) => handleUpdateLossEntry(entry.id, { detailCodeId: v })} disabled={isClosed}>
                                 <SelectTrigger style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}><SelectValue placeholder="Detail code" /></SelectTrigger>
                                 <SelectContent style={{ fontSize: '0.75rem' }}>{filteredDetailCodes.map((dc) => (<SelectItem key={dc.id} value={dc.id} className="text-xs">{dc.name}</SelectItem>))}</SelectContent>
                               </Select>
@@ -1683,7 +1791,7 @@ export default function DailyPage() {
                               <button
                                 type="button"
                                 disabled={isClosed}
-                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "shutdown")}
+                                onClick={() => handleUpdateLossEntry(entry.id, { lossType: "shutdown" })}
                                 className={cn(
                                   "px-2 text-[10px] font-medium transition-colors",
                                   entry.lossType === "shutdown"
@@ -1696,7 +1804,7 @@ export default function DailyPage() {
                               <button
                                 type="button"
                                 disabled={isClosed}
-                                onClick={() => handleUpdateLossEntry(entry.id, "lossType", "slowdown")}
+                                onClick={() => handleUpdateLossEntry(entry.id, { lossType: "slowdown" })}
                                 className={cn(
                                   "px-2 text-[10px] font-medium transition-colors border-l border-input",
                                   entry.lossType === "slowdown"
@@ -1723,10 +1831,19 @@ export default function DailyPage() {
                                 onChange={(e) => {
                                   const raw = parseFloat(e.target.value) || 0;
                                   const inProdUnits = toProductionUnits(raw, unit);
-                                  handleUpdateLossEntry(entry.id, "amount", Math.round(inProdUnits * 100) / 100);
+                                  handleUpdateLossEntry(entry.id, {
+                                    amount: Math.round(inProdUnits * 100) / 100,
+                                    durationHours:
+                                      unit === "hours" ? raw : unit === "days" ? raw * 24 : null,
+                                  });
                                 }}
                                 disabled={isClosed}
-                                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    commentsRefs.current.get(entry.id)?.focus();
+                                  }
+                                }}
                               />
                               <button
                                 type="button"
@@ -1762,7 +1879,13 @@ export default function DailyPage() {
                                       .reduce((sum, e) => sum + (e.amount ?? 0), 0);
                                     const assignAmount = Math.round((absDelta - otherTotal) * 100) / 100;
                                     if (assignAmount > 0) {
-                                      handleUpdateLossEntry(entry.id, "amount", assignAmount);
+                                      handleUpdateLossEntry(entry.id, {
+                                        amount: assignAmount,
+                                        durationHours:
+                                          unit === "hours" || unit === "days"
+                                            ? fromProductionUnits(assignAmount, "hours")
+                                            : null,
+                                      });
                                     }
                                   }}
                                 >
@@ -1775,13 +1898,23 @@ export default function DailyPage() {
                             </Tooltip>
                           )}
 
-                          {/* Comments */}
+                          {/* Comments — Enter adds the next entry row */}
                           <Input
-                            placeholder="Notes..."
+                            placeholder="Notes... (Enter for next entry)"
                             className="flex-1 min-w-0"
                             style={{ height: '1.75rem', fontSize: '0.75rem', lineHeight: '1rem' }}
                             value={entry.comments ?? ""}
-                            onChange={(e) => handleUpdateLossEntry(entry.id, "comments", e.target.value)}
+                            ref={(el: HTMLInputElement | null) => {
+                              if (el) commentsRefs.current.set(entry.id, el);
+                              else commentsRefs.current.delete(entry.id);
+                            }}
+                            onChange={(e) => handleUpdateLossEntry(entry.id, { comments: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !isClosed) {
+                                e.preventDefault();
+                                handleAddLossEntry();
+                              }
+                            }}
                             disabled={isClosed}
                           />
                         </div>
