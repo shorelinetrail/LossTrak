@@ -314,13 +314,11 @@ export function LossContextPanel({
   // ─── Heatmap Data ──────────────────────────────────────
 
   const heatmapData = useMemo(() => {
-    let globalMax = 0;
     const rows = categories.map((cat) => {
       const catSubs = subcategories.filter((s) => s.categoryId === cat.id);
       const cells = displayHistory.map((day) => {
         const catEntries = day.entries.filter((e) => e.categoryId === cat.id);
         const total = catEntries.reduce((sum, e) => sum + e.amount, 0);
-        if (total > globalMax) globalMax = total;
         const subBreakdown = catSubs
           .map((sub) => ({
             name: sub.name,
@@ -361,6 +359,10 @@ export function LossContextPanel({
       const sparkValues = cells.map((c) => c.total);
       return { category: cat, cells, subcategoryRows, sparkValues };
     });
+    const globalMax = rows.reduce(
+      (max, row) => row.cells.reduce((m, c) => Math.max(m, c.total), max),
+      0
+    );
     return { rows, globalMax };
   }, [categories, subcategories, subcategoryMap, displayHistory]);
 

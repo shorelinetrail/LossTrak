@@ -65,7 +65,7 @@ function isNavGroup(item: NavItem | NavGroup): item is NavGroup {
   return "items" in item;
 }
 
-export function AppSidebar() {
+export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
     Reports: true,
@@ -113,6 +113,7 @@ export function AppSidebar() {
                         <li key={sub.href}>
                           <Link
                             href={sub.href}
+                            onClick={onNavigate}
                             className={cn(
                               "flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                               pathname === sub.href
@@ -134,6 +135,7 @@ export function AppSidebar() {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  onClick={onNavigate}
                   className={cn(
                     "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                     pathname === item.href

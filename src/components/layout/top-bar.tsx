@@ -1,10 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { useTheme } from "next-themes";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, Monitor, Building2, ChevronDown, Check, LogOut } from "lucide-react";
+import { Sun, Moon, Monitor, Building2, ChevronDown, Check, LogOut, Menu } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { AppSidebar } from "./app-sidebar";
 import {
   Tooltip,
   TooltipContent,
@@ -56,10 +64,24 @@ export function TopBar() {
     isLoading,
   } = usePlant();
 
+  const [navOpen, setNavOpen] = useState(false);
+
   return (
     <header className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-background px-4">
-      {/* Plant selector */}
-      <div>
+      {/* Mobile nav + plant selector */}
+      <div className="flex items-center gap-1">
+        <Sheet open={navOpen} onOpenChange={setNavOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden">
+              <Menu className="h-4 w-4" />
+              <span className="sr-only">Open navigation</span>
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-64 p-0">
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <AppSidebar onNavigate={() => setNavOpen(false)} />
+          </SheetContent>
+        </Sheet>
         {mounted && !isLoading && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

@@ -272,16 +272,20 @@ export function BulkEntryDialog({
     let skipped = 0;
     let lossCount = 0;
 
-    try {
-      for (const row of rows) {
-        const prod = parseFloat(row.production);
+    // Each day saves independently so one failure doesn't abort the rest;
+    // failed dates are reported explicitly at the end.
+    const failedDates: string[] = [];
 
-        if (row.existingLog && conflictMode === "skip") {
-          skipped++;
-          setSavedCount((c) => c + 1);
-          continue;
-        }
+    for (const row of rows) {
+      const prod = parseFloat(row.production);
 
+      if (row.existingLog && conflictMode === "skip") {
+        skipped++;
+        setSavedCount((c) => c + 1);
+        continue;
+      }
+
+      try {
         let dailyLogId: string;
 
         if (row.existingLog) {
@@ -321,26 +325,35 @@ export function BulkEntryDialog({
           });
           lossCount++;
         }
-
-        setSavedCount((c) => c + 1);
+      } catch (err) {
+        console.error(`Bulk save error for ${row.date}:`, err);
+        failedDates.push(row.date);
       }
 
-      const parts: string[] = [];
-      if (created) parts.push(`${created} day${created > 1 ? "s" : ""} created`);
-      if (updated) parts.push(`${updated} updated`);
-      if (skipped) parts.push(`${skipped} skipped`);
-      if (lossCount) parts.push(`${lossCount} loss entr${lossCount > 1 ? "ies" : "y"}`);
-      toast.success(parts.join(", ") || "No changes made.");
+      setSavedCount((c) => c + 1);
+    }
 
+    const parts: string[] = [];
+    if (created) parts.push(`${created} day${created > 1 ? "s" : ""} created`);
+    if (updated) parts.push(`${updated} updated`);
+    if (skipped) parts.push(`${skipped} skipped`);
+    if (lossCount) parts.push(`${lossCount} loss entr${lossCount > 1 ? "ies" : "y"}`);
+
+    if (failedDates.length > 0) {
+      toast.error(
+        `Failed to save ${failedDates.length} day${failedDates.length > 1 ? "s" : ""}: ${failedDates
+          .map((d) => format(new Date(d + "T00:00:00"), "MMM d"))
+          .join(", ")}. ${parts.length > 0 ? `Saved: ${parts.join(", ")}.` : ""}`,
+        { duration: 10000 }
+      );
+      onSaved();
+    } else {
+      toast.success(parts.join(", ") || "No changes made.");
       onSaved();
       onOpenChange(false);
-    } catch (err) {
-      console.error("Bulk save error:", err);
-      toast.error("Error saving bulk entries. Some data may have been saved.");
-    } finally {
-      setSaving(false);
     }
-  }, [rows, conflictMode, bar, onSaved, onOpenChange]);
+    setSaving(false);
+  }, [rows, conflictMode, bar, plantId, onSaved, onOpenChange]);
 
   // ── Date range summary ────────────────────────────────────────
 
