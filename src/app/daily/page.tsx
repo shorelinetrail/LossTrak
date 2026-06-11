@@ -96,6 +96,12 @@ import { cn } from "@/lib/utils";
 import { usePlant } from "@/components/plant-context";
 import { LossContextPanel } from "@/components/daily/loss-context-panel";
 import { BulkEntryDialog } from "@/components/daily/bulk-entry-dialog";
+import {
+  ConfirmDialog,
+  ConfirmDialogState,
+  CONFIRM_DIALOG_CLOSED,
+} from "@/components/confirm-dialog";
+import { useDebouncedSaves } from "@/lib/use-debounced-saves";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -235,6 +241,16 @@ export default function DailyPage() {
   const [dayComments, setDayComments] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
+  const [confirmState, setConfirmState] = useState<ConfirmDialogState>(CONFIRM_DIALOG_CLOSED);
+
+  // Typing in production/amount/comment fields debounces the network write
+  // so each keystroke no longer hits the database.
+  const { schedule: scheduleSave, cancel: cancelSave } = useDebouncedSaves();
+
+  const closeConfirm = useCallback(
+    (open: boolean) => setConfirmState((s) => ({ ...s, open })),
+    []
+  );
 
   const dateKey = useMemo(
     () => selectedDate ? format(selectedDate, "yyyy-MM-dd") : "",
@@ -532,33 +548,37 @@ export default function DailyPage() {
   }, [productionInput, dateKey, bar, selectedPlantId, refreshLogTable]);
 
   const handleUpdateProduction = useCallback(
-    async (value: string) => {
+    (value: string) => {
       setProductionInput(value);
       const prod = parseFloat(value);
       if (!dailyLog || isNaN(prod) || prod < 0) return;
-      try {
-        const updated = await updateDailyLog(dateKey, { production: prod });
-        setDailyLog(updated);
-        await refreshLogTable();
-      } catch (err) {
-        console.error("Failed to update production:", err);
-        toast.error("Failed to update production.");
-      }
+      scheduleSave("production", async () => {
+        try {
+          const updated = await updateDailyLog(dateKey, { production: prod });
+          setDailyLog(updated);
+          await refreshLogTable();
+        } catch (err) {
+          console.error("Failed to update production:", err);
+          toast.error("Failed to update production.");
+        }
+      });
     },
-    [dailyLog, dateKey, refreshLogTable]
+    [dailyLog, dateKey, refreshLogTable, scheduleSave]
   );
 
   const handleDayCommentsChange = useCallback(
-    async (value: string) => {
+    (value: string) => {
       setDayComments(value);
       if (!dailyLog) return;
-      try {
-        await updateDailyLog(dateKey, { comments: value });
-      } catch {
-        // auto-save
-      }
+      scheduleSave("dayComments", async () => {
+        try {
+          await updateDailyLog(dateKey, { comments: value });
+        } catch {
+          // auto-save
+        }
+      });
     },
-    [dailyLog, dateKey]
+    [dailyLog, dateKey, scheduleSave]
   );
 
   const handleAddLossEntry = useCallback(async () => {
@@ -600,28 +620,37 @@ export default function DailyPage() {
           return updated;
         })
       );
-      try {
-        const updateData: Record<string, string | number> = { [field]: value };
-        if (field === "categoryId") {
-          updateData.subcategoryId = "";
-          updateData.detailCodeId = "";
+      const updateData: Record<string, string | number> = { [field]: value };
+      if (field === "categoryId") {
+        updateData.subcategoryId = "";
+        updateData.detailCodeId = "";
+      }
+      if (field === "subcategoryId") {
+        updateData.detailCodeId = "";
+      }
+      const persist = async () => {
+        try {
+          await updateLossEntry(entryId, updateData);
+          if (field === "amount") await refreshLogTable();
+        } catch (err) {
+          console.error("Failed to save loss entry:", err);
+          toast.error("Failed to save loss entry.");
         }
-        if (field === "subcategoryId") {
-          updateData.detailCodeId = "";
-        }
-        await updateLossEntry(entryId, updateData);
-        if (field === "amount") await refreshLogTable();
-      } catch (err) {
-        console.error("Failed to save loss entry:", err);
-        toast.error("Failed to save loss entry.");
+      };
+      // Typed fields debounce; select/toggle fields save immediately.
+      if (field === "amount" || field === "comments") {
+        scheduleSave(`entry:${entryId}:${field}`, persist);
+      } else {
+        void persist();
       }
     },
-    [refreshLogTable]
+    [refreshLogTable, scheduleSave]
   );
 
   const handleDeleteLossEntry = useCallback(
     async (entryId: string) => {
       try {
+        cancelSave(`entry:${entryId}:`);
         await deleteLossEntry(entryId);
         setLossEntries((prev) => prev.filter((e) => e.id !== entryId));
         toast.success("Loss entry removed.");
@@ -631,7 +660,7 @@ export default function DailyPage() {
         toast.error("Failed to delete loss entry.");
       }
     },
-    [refreshLogTable]
+    [refreshLogTable, cancelSave]
   );
 
   const handleCloseDay = useCallback(async () => {
@@ -819,33 +848,47 @@ export default function DailyPage() {
     }
   }, [refreshLogTable]);
 
-  const handleBulkDelete = useCallback(async () => {
+  const handleBulkDelete = useCallback(() => {
     const ids = Array.from(selectedIdsRef.current);
     if (ids.length === 0) return;
-    if (!confirm(`Delete ${ids.length} day${ids.length > 1 ? "s" : ""} and all their loss entries? This cannot be undone.`)) return;
-    try {
-      await bulkDeleteDailyLogs(ids);
-      toast.success(`Deleted ${ids.length} day${ids.length > 1 ? "s" : ""}.`);
-      setSelectedIds(new Set());
-      await refreshLogTable();
-    } catch (err) {
-      console.error("Bulk delete failed:", err);
-      toast.error("Failed to delete selected days.");
-    }
+    const label = `${ids.length} day${ids.length > 1 ? "s" : ""}`;
+    setConfirmState({
+      open: true,
+      title: `Delete ${label}?`,
+      description: `This permanently deletes ${label} and all their loss entries. This cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await bulkDeleteDailyLogs(ids);
+          toast.success(`Deleted ${label}.`);
+          setSelectedIds(new Set());
+          await refreshLogTable();
+        } catch (err) {
+          console.error("Bulk delete failed:", err);
+          toast.error("Failed to delete selected days.");
+        }
+      },
+    });
   }, [refreshLogTable]);
 
-  const handleDeleteDay = useCallback(async () => {
+  const handleDeleteDay = useCallback(() => {
     if (!dailyLog) return;
-    if (!confirm(`Delete this day (${dateKey}) and all its loss entries? This cannot be undone.`)) return;
-    try {
-      await deleteDailyLog(dailyLog.id);
-      toast.success("Day deleted.");
-      setSelectedDate(null);
-      await refreshLogTable();
-    } catch (err) {
-      console.error("Failed to delete day:", err);
-      toast.error("Failed to delete day.");
-    }
+    setConfirmState({
+      open: true,
+      title: `Delete ${dateKey}?`,
+      description:
+        "This permanently deletes this day and all its loss entries. This cannot be undone.",
+      onConfirm: async () => {
+        try {
+          await deleteDailyLog(dailyLog.id);
+          toast.success("Day deleted.");
+          setSelectedDate(null);
+          await refreshLogTable();
+        } catch (err) {
+          console.error("Failed to delete day:", err);
+          toast.error("Failed to delete day.");
+        }
+      },
+    });
   }, [dailyLog, dateKey, refreshLogTable]);
 
   // ── Sort icon helper ─────────────────────────────────────────
@@ -1226,6 +1269,7 @@ export default function DailyPage() {
           subcategories={subcategories}
           existingLogs={allLogs}
         />
+        <ConfirmDialog state={confirmState} onOpenChange={closeConfirm} />
       </div>
     );
   }
@@ -1822,6 +1866,7 @@ export default function DailyPage() {
           )}
         </>
       )}
+      <ConfirmDialog state={confirmState} onOpenChange={closeConfirm} />
     </div>
   );
 }
